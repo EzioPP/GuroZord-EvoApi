@@ -1,0 +1,263 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\usepackage{tikz}
+\usepackage{pagecolor}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{amssymb}
+
+% ── Colors ───────────────────────────────────────────────
+\definecolor{bg}{HTML}{07070f}
+\definecolor{ink}{HTML}{e2e2f0}
+\definecolor{mid}{HTML}{a0a0c0}
+\definecolor{soft}{HTML}{555577}
+\definecolor{rule}{HTML}{1e1e35}
+\definecolor{purple}{HTML}{a78bfa}
+\definecolor{purpledark}{HTML}{6366f1}
+\definecolor{green}{HTML}{4ade80}
+\definecolor{yellow}{HTML}{facc15}
+\definecolor{rowA}{HTML}{0d0d1a}
+\definecolor{rowB}{HTML}{111120}
+
+% ── Page background ──────────────────────────────────────
+\pagecolor{bg}
+\color{ink}
+
+% ── Hyperref ─────────────────────────────────────────────
+\hypersetup{
+  colorlinks=true,
+  linkcolor=purple,
+  urlcolor=purple,
+  pdftitle={Projeto GuroZord},
+  pdfauthor={GuroZord},
+}
+
+% ── Section formatting ───────────────────────────────────
+\titleformat{\section}
+  {\large\bfseries\color{ink}}
+  {}{0em}{}[\color{rule}\titlerule]
+
+\titleformat{\subsection}
+  {\normalsize\bfseries\color{purple}}
+  {}{0em}{}
+
+\titlespacing{\section}{0pt}{20pt}{8pt}
+\titlespacing{\subsection}{0pt}{14pt}{4pt}
+
+\pagestyle{empty}
+
+% ── TikZ full logo ───────────────────────────────────────
+\newcommand{\gurozordlogo}[1][1]{%
+  \begin{tikzpicture}[scale=#1, baseline=0]
+    % background
+    \fill[black!92, rounded corners=6pt] (0,0) rectangle (5.4,1.2);
+    \draw[purple, opacity=0.12, rounded corners=6pt, line width=0.6pt]
+      (0.04,0.04) rectangle (5.36,1.16);
+
+    % eye icon
+    \draw[purple, opacity=0.3, rounded corners=2.5pt, line width=0.6pt]
+      (0.15,0.1) rectangle (1.05,1.0);
+    \draw[purple, line width=0.9pt]
+      (0.22,0.55) .. controls (0.6,0.18) and (0.6,0.92) .. (0.98,0.55)
+                  .. controls (0.6,0.92) and (0.6,0.18) .. (0.22,0.55);
+    \draw[purple, line width=0.7pt] (0.6,0.55) circle (0.14);
+    \fill[purple] (0.6,0.55) circle (0.055);
+
+    % wordmark
+    \node[anchor=base west, inner sep=0pt] at (1.2, 0.38) {%
+      \fontsize{13}{13}\selectfont\bfseries\color{purple}GuroZord%
+    };
+
+    % divider
+    \draw[purple, opacity=0.25, line width=0.4pt] (1.2,0.26) -- (5.25,0.26);
+
+    % tagline
+    \node[anchor=base west, inner sep=0pt] at (1.22, 0.14) {%
+      \fontsize{4.5}{4.5}\selectfont\color{purple!50}%
+      \MakeUppercase{From chaos came order}%
+    };
+  \end{tikzpicture}%
+}
+
+\begin{document}
+
+% ── Title block ──────────────────────────────────────────
+\noindent
+{\fontsize{28}{34}\selectfont\bfseries\color{ink} Projeto GuroZord}\\[4pt]
+{\small\color{soft}\MakeUppercase{Requisitos Funcionais · v1.0}}
+
+\vspace{12pt}
+\noindent\gurozordlogo[1.5]
+
+\vspace{10pt}
+{\color{rule}\hrule}
+\vspace{20pt}
+
+% ── Contexto ─────────────────────────────────────────────
+\section{Contexto}
+
+Bot simples de moderação de grupos de WhatsApp.
+
+{\color{mid}\itshape
+Origem da ideia: fechar o grupo em horário configurável, reabrir pela manhã,
+exibir ranking de interações e incentivar a participação de todos os membros.
+}
+
+% ── Requisitos Funcionais ─────────────────────────────────
+\section{Requisitos Funcionais}
+
+\subsection{RF1 · Grupo Fechado com Horário Configurável}
+{\color{mid}\itshape
+Fechar o grupo para mensagens de não-admins em horário configurável (ex.: 01h)
+e reabrir automaticamente em outro horário (ex.: 10h). Apenas administradores
+podem enviar mensagens fora do horário ativo.
+}
+
+\subsection{RF2 · Leaderboard de Engajamento}
+{\color{mid}\itshape
+Exibir ranking com o Top 10 de membros com mais mensagens enviadas no período.
+Pode ser acionado via comando \texttt{/top} ou enviado automaticamente em horário
+fixo na reabertura do grupo.
+}
+
+\subsection{RF3 · Banimento Automático por Inatividade}
+{\color{mid}\itshape
+Monitorar a atividade dos membros e aplicar política de inatividade progressiva:
+}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=2pt]
+  \item \textbf{\color{ink}RF3.1} {\color{mid}— Aviso via mensagem privada após 3 dias de inatividade.}
+  \item \textbf{\color{ink}RF3.2} {\color{mid}— Banimento automático do grupo após 7 dias de inatividade.}
+\end{itemize}
+
+\subsection{RF4 · Sistema de Avisos (Warnings)}
+{\color{mid}\itshape
+Sistema de advertências para usuários que violarem regras. Cada aviso é registrado
+e pode acumular para resultar em punições automáticas (mute, kick, ban).
+}
+
+\subsection{RF5 · Filtro de Palavras e Conteúdo Sensível}
+{\color{mid}\itshape
+Moderação automática de conteúdo indesejado no grupo:
+}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=2pt]
+  \item \textbf{\color{ink}RF5.1} {\color{mid}— Bloquear automaticamente palavrões excessivos.}
+  \item \textbf{\color{ink}RF5.2} {\color{mid}— Detectar e remover links suspeitos.}
+  \item \textbf{\color{ink}RF5.3} {\color{mid}— Bloquear divulgação de outros grupos.}
+  \item \textbf{\color{ink}RF5.4} {\color{mid}— Detectar e punir ataques pessoais entre membros.}
+\end{itemize}
+
+% ── Plano de Entrega ─────────────────────────────────────
+\section{Plano de Entrega}
+
+{\color{mid}\itshape
+Desenvolvedor solo · Prazo final: 28/02/2026
+}
+
+\vspace{10pt}
+
+% ── Fase 1 ───────────────────────────────────────────────
+\subsection{Fase 1 · MVP — Controle de Horário \hfill {\normalfont\small\color{soft}20–21/02}}
+
+{\color{mid}
+Implementar a lógica central de abertura e fechamento do grupo.
+Esta fase entrega valor imediato e valida a integração com a API do WhatsApp.
+}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=3pt]
+  \item {\color{ink}RF1} — Agendador de abertura/fechamento com horários configuráveis
+  \item {\color{ink}RF1} — Restrição de mensagens para não-admins fora do horário ativo
+  \item {\color{ink}—} — Configuração via arquivo \texttt{.env} ou comando \texttt{/config}
+\end{itemize}
+
+\vspace{4pt}
+{\small\color{green}$\checkmark$ \textbf{Marco:} Bot ativo, grupo fecha e abre automaticamente.}
+
+\vspace{10pt}
+
+% ── Fase 2 ───────────────────────────────────────────────
+\subsection{Fase 2 · Engajamento — Leaderboard \hfill {\normalfont\small\color{soft}22–23/02}}
+
+{\color{mid}
+Adicionar rastreamento de mensagens e exibição do ranking.
+Entrega combinada com a Fase 1 como requisito mínimo acordado.
+}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=3pt]
+  \item {\color{ink}RF2} — Contagem de mensagens por membro no período
+  \item {\color{ink}RF2} — Comando \texttt{/top} para exibição manual do Top 10
+  \item {\color{ink}RF2} — Envio automático do ranking na reabertura do grupo
+\end{itemize}
+
+\vspace{4pt}
+{\small\color{green}$\checkmark$ \textbf{Marco:} Requisito mínimo (RF1 + RF2) entregue até 23/02.}
+
+\vspace{10pt}
+
+% ── Fase 3 ───────────────────────────────────────────────
+\subsection{Fase 3 · Retenção — Inatividade e Avisos \hfill {\normalfont\small\color{soft}24–26/02}}
+
+{\color{mid}
+Implementar políticas automáticas de engajamento e punição progressiva.
+Depende de persistência de dados implementada na Fase 2.
+}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=3pt]
+  \item {\color{ink}RF3.1} — Aviso privado após 3 dias de inatividade
+  \item {\color{ink}RF3.2} — Banimento automático após 7 dias de inatividade
+  \item {\color{ink}RF4} — Sistema de warnings acumulativos com punições automáticas
+\end{itemize}
+
+\vspace{4pt}
+{\small\color{yellow}$\circ$ \textbf{Marco:} Moderação proativa funcionando sem intervenção manual.}
+
+\vspace{10pt}
+
+% ── Fase 4 ───────────────────────────────────────────────
+\subsection{Fase 4 · Proteção — Filtro de Conteúdo \hfill {\normalfont\small\color{soft}27–28/02}}
+
+{\color{mid}
+Camada de segurança automática. Fase de maior complexidade — escopo pode ser
+reduzido se o tempo for insuficiente, priorizando RF5.2 e RF5.3.
+}
+
+\begin{itemize}[leftmargin=1.5em, itemsep=3pt]
+  \item {\color{ink}RF5.2} — Remoção de links suspeitos \textit{(prioridade alta)}
+  \item {\color{ink}RF5.3} — Bloqueio de divulgação de outros grupos \textit{(prioridade alta)}
+  \item {\color{ink}RF5.1} — Filtro de palavrões \textit{(prioridade média)}
+  \item {\color{ink}RF5.4} — Detecção de ataques pessoais \textit{(prioridade baixa / pós-entrega)}
+\end{itemize}
+
+\vspace{4pt}
+{\small\color{yellow}$\circ$ \textbf{Marco:} Grupo protegido contra spam e conteúdo indesejado.}
+
+\vspace{16pt}
+
+% ── Tabela resumo ────────────────────────────────────────
+{\color{rule}\hrule}
+\vspace{8pt}
+{\small
+\begin{tabularx}{\textwidth}{@{} l l l X @{}}
+  \color{soft}\textbf{Fase} & \color{soft}\textbf{Período} & \color{soft}\textbf{RFs} & \color{soft}\textbf{Status} \\[4pt]
+  \color{ink}1 · MVP         & \color{mid}20–21/02 & \color{purple}RF1          & \color{green}Comprometido \\
+  \color{ink}2 · Leaderboard & \color{mid}22–23/02 & \color{purple}RF2          & \color{green}Comprometido \\
+  \color{ink}3 · Retenção    & \color{mid}24–26/02 & \color{purple}RF3 + RF4    & \color{yellow}Melhor esforço \\
+  \color{ink}4 · Proteção    & \color{mid}27–28/02 & \color{purple}RF5          & \color{yellow}Melhor esforço \\
+\end{tabularx}
+}
+
+\vspace{16pt}
+{\footnotesize\color{soft} GuroZord · Documento interno · 2026 · Feito por \textcolor{purple}{GuroNaive}}
+
+\end{document}
