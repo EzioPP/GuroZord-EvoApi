@@ -12,12 +12,14 @@ export async function handleMessagesUpsert(data: EvolutionMessageData) {
   if (!message) {
     return;
   }
-  if (process.env.NODE_ENV === 'development') {
-    if (senderId !== process.env.TEST_WHATSAPP_NUMBER) {
-      logger.info('Ignoring message from non-test number in development', { senderId });
-      return;
-    }
+  if (senderId !== process.env.TEST_WHATSAPP_NUMBER) {
+    logger.info('Ignoring message from non-test number in development', { senderId });
+    return;
   }
+  if (process.env.NODE_ENV === 'development') {
+    //
+  }
+
   if (message.includes('hello')) {
     logger.info('Message contains "hello"', { message });
     const responseMessage = 'world';
