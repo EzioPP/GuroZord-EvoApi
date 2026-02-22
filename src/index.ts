@@ -2,7 +2,7 @@ import app from './http/app';
 import { scheduleAllGroupJobs } from './jobs/group-jobs';
 import { startGroupWorker } from './jobs/group-worker';
 import logger from './lib/logger';
-
+import 'module-alias/register';
 const start = async () => {
   try {
     startGroupWorker();
