@@ -31,14 +31,14 @@ jobs:
             set -e
 
             # Clone or pull
-            if [ ! -d /data/GuroZorg/.git ]; then
-              git clone https://github.com/EzioPP/GuroZord-EvoApi.git  /data/GuroZorg
+            if [ ! -d /data/GuroZord/.git ]; then
+              git clone https://github.com/EzioPP/GuroZord-EvoApi.git  /data/GuroZord
             fi
-            cd /data/GuroZorg
+            cd /data/GuroZord
             git pull origin main
 
             # Write .env file
-            cat > /data/GuroZorg/.env << EOF
+            cat > /data/GuroZord/.env << EOF
             NODE_ENV=production
 
             # Server
@@ -82,13 +82,13 @@ jobs:
             EOF
 
             # Docker Compose - restart only if compose file changed
-            PREV_COMPOSE_HASH=$(cat /data/GuroZorg/.compose_hash 2>/dev/null || echo "")
+            PREV_COMPOSE_HASH=$(cat /data/GuroZord/.compose_hash 2>/dev/null || echo "")
             CURR_COMPOSE_HASH=$(sha256sum docker-compose.yml | awk '{print $1}')
             if [ "$PREV_COMPOSE_HASH" != "$CURR_COMPOSE_HASH" ]; then
               echo "docker-compose.yml changed, restarting services..."
               docker compose down
               docker compose up -d
-              echo "$CURR_COMPOSE_HASH" > /data/GuroZorg/.compose_hash
+              echo "$CURR_COMPOSE_HASH" > /data/GuroZord/.compose_hash
             else
               echo "docker-compose.yml unchanged, ensuring services are up..."
               docker compose up -d --no-recreate
@@ -114,7 +114,7 @@ jobs:
             npx prisma migrate deploy
 
             # PM2
-            if pm2 describe gurozorg > /dev/null 2>&1; then
+            if pm2 describe gurozord > /dev/null 2>&1; then
               pm2 restart ecosystem.config.js --update-env
             else
               pm2 start ecosystem.config.js --env production

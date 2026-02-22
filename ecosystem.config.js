@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'gurozorg',
+      name: 'gurozord',
       script: 'dist/src/index.js',
       node_args: '-r module-alias/register',
       instances: 1,
