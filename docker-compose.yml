@@ -48,10 +48,28 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_CONNECTION_URI=postgresql://postgres:senha123evolutiondocker@postgres:5432/evolution
-      - DATABASE_URL=postgresql://postgres:senha123evolutiondocker@postgres:5432/evolution
+      - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/evolution
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/evolution
     volumes:
       - evolution_instances:/evolution/instances
+
+  gurozord:
+    container_name: gurozord
+    image: node:24-alpine
+    working_dir: /app
+    command: node -r module-alias/register dist/src/index.js
+    restart: always
+    ports:
+      - '3001:3001'
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:
