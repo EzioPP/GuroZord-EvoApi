@@ -55,6 +55,7 @@ jobs:
             nvm install 24
             nvm use 24
             npm ci
+            npx prisma generate
             npm run build
 
             # Docker Compose - restart only if compose file changed
@@ -72,11 +73,11 @@ jobs:
 
             # Wait for healthy dependencies
             echo "Waiting for postgres and redis to be healthy..."
-            timeout 60 bash -c 'until docker inspect --format="{{.State.Health.Status}}" postgres | grep -q healthy; do sleep 2; done'
-            timeout 60 bash -c 'until docker inspect --format="{{.State.Health.Status}}" redis | grep -q healthy; do sleep 2; done'
+            timeout 120 bash -c 'until docker inspect --format="{{.State.Health.Status}}" postgres | grep -q healthy; do sleep 2; done'
+            timeout 120 bash -c 'until docker inspect --format="{{.State.Health.Status}}" redis | grep -q healthy; do sleep 2; done'
 
             # Wait for gurozord container
-            timeout 60 bash -c 'until docker inspect --format="{{.State.Status}}" gurozord 2>/dev/null | grep -q running; do sleep 2; done'
+            timeout 120 bash -c 'until docker inspect --format="{{.State.Status}}" gurozord 2>/dev/null | grep -q running; do sleep 2; done'
 
             # Run migrations inside container
             docker exec gurozord npx prisma migrate deploy
