@@ -32,54 +32,30 @@ jobs:
 
             # Clone or pull
             if [ ! -d /data/GuroZord/.git ]; then
-              git clone https://github.com/EzioPP/GuroZord-EvoApi.git  /data/GuroZord
+              git clone https://github.com/EzioPP/GuroZord-EvoApi.git /data/GuroZord
             fi
             cd /data/GuroZord
             git pull origin main
 
             # Write .env file
-            cat > /data/GuroZord/.env << EOF
-            NODE_ENV=production
+            printf 'NODE_ENV=production\nSERVER_URL=%s\nAUTHENTICATION_API_KEY=%s\nPOSTGRES_USER=%s\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=%s\nDATABASE_ENABLED=true\nDATABASE_PROVIDER=postgresql\nDATABASE_CONNECTION_URI=postgresql://%s:%s@postgres:5432/%s\nDATABASE_SAVE_DATA_INSTANCE=true\nDATABASE_SAVE_DATA_NEW_MESSAGE=true\nDATABASE_SAVE_MESSAGE_UPDATE=true\nDATABASE_SAVE_DATA_CONTACTS=true\nDATABASE_SAVE_DATA_CHATS=true\nDATABASE_URL=%s\nEVOLUTION_API_URL=%s\nTEST_WHATSAPP_NUMBER=%s\nREDIS_URI=%s\nCACHE_REDIS_ENABLED=true\nCACHE_REDIS_URI=redis://redis:6379\nCACHE_REDIS_PREFIX_KEY=evolution\nCACHE_REDIS_SAVE_INSTANCES=true\nCACHE_LOCAL_ENABLED=false\nCONFIG_SESSION_PHONE_VERSION=2.3000.1033840069\n' \
+              "$SERVER_URL" "$AUTHENTICATION_API_KEY" "$POSTGRES_USER" "$POSTGRES_PASSWORD" "$POSTGRES_DB" \
+              "$POSTGRES_USER" "$POSTGRES_PASSWORD" "$POSTGRES_DB" \
+              "$DATABASE_URL" "$EVOLUTION_API_URL" "$TEST_WHATSAPP_NUMBER" "$REDIS_URI" \
+              > /data/GuroZord/.env
 
-            # Server
-            SERVER_URL=${SERVER_URL}
-
-            # Authentication
-            AUTHENTICATION_API_KEY=${AUTHENTICATION_API_KEY}
-
-            # PostgreSQL
-            POSTGRES_USER=${POSTGRES_USER}
-            POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-            POSTGRES_DB=${POSTGRES_DB}
-
-            # Database
-            DATABASE_ENABLED=true
-            DATABASE_PROVIDER=postgresql
-            DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-            DATABASE_SAVE_DATA_INSTANCE=true
-            DATABASE_SAVE_DATA_NEW_MESSAGE=true
-            DATABASE_SAVE_MESSAGE_UPDATE=true
-            DATABASE_SAVE_DATA_CONTACTS=true
-            DATABASE_SAVE_DATA_CHATS=true
-
-            DATABASE_URL=${DATABASE_URL}
-
-            # Evolution
-            EVOLUTION_API_URL=${EVOLUTION_API_URL}
-
-            # Prisma
-            TEST_WHATSAPP_NUMBER=${TEST_WHATSAPP_NUMBER}
-
-            # Redis
-            REDIS_URI=${REDIS_URI}
-            CACHE_REDIS_ENABLED=true
-            CACHE_REDIS_URI=redis://redis:6379
-            CACHE_REDIS_PREFIX_KEY=evolution
-            CACHE_REDIS_SAVE_INSTANCES=true
-            CACHE_LOCAL_ENABLED=false
-
-            CONFIG_SESSION_PHONE_VERSION=2.3000.1033840069
-            EOF
+            # Node setup (build only)
+            export NVM_DIR="$HOME/.nvm"
+            if [ -s "$NVM_DIR/nvm.sh" ]; then
+              . "$NVM_DIR/nvm.sh"
+            else
+              echo "nvm not found at $NVM_DIR"
+              exit 1
+            fi
+            nvm install 24
+            nvm use 24
+            npm ci
+            npm run build
 
             # Docker Compose - restart only if compose file changed
             PREV_COMPOSE_HASH=$(cat /data/GuroZord/.compose_hash 2>/dev/null || echo "")
@@ -99,24 +75,8 @@ jobs:
             timeout 60 bash -c 'until docker inspect --format="{{.State.Health.Status}}" postgres | grep -q healthy; do sleep 2; done'
             timeout 60 bash -c 'until docker inspect --format="{{.State.Health.Status}}" redis | grep -q healthy; do sleep 2; done'
 
-            # Node setup
-            export NVM_DIR="$HOME/.nvm"
-            if [ -s "$NVM_DIR/nvm.sh" ]; then
-              . "$NVM_DIR/nvm.sh"
-            else
-              echo "nvm not found at $NVM_DIR"
-              exit 1
-            fi
-            nvm install 24
-            nvm use 24
-            npm ci
-            npm run build
-            npx prisma migrate deploy
+            # Wait for gurozord container
+            timeout 60 bash -c 'until docker inspect --format="{{.State.Status}}" gurozord 2>/dev/null | grep -q running; do sleep 2; done'
 
-            # PM2
-            if pm2 describe gurozord > /dev/null 2>&1; then
-              pm2 restart ecosystem.config.js --update-env
-            else
-              pm2 start ecosystem.config.js --env production
-            fi
-            pm2 save
+            # Run migrations inside container
+            docker exec gurozord npx prisma migrate deploy
