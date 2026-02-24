@@ -97,39 +97,39 @@ export class GroupRepository {
     }
   }
   // group.repository.ts
-async getOwnedGroupByMemberWhatsappId(whatsappId: string) {
-  try {
-    logger.debug('Repository: Fetching owned group by member WhatsApp ID', { whatsappId });
-    
-    // First check if member exists
-    const member = await this.prisma.member.findUnique({
-      where: { whatsappId },
-    });
-    logger.debug('Member found', { member });
+  async getOwnedGroupByMemberWhatsappId(whatsappId: string) {
+    try {
+      logger.debug('Repository: Fetching owned group by member WhatsApp ID', { whatsappId });
 
-    const membership = await this.prisma.membership.findFirst({
-      where: {
-        member: { whatsappId },
-        isOwner: true,
-      },
-      include: { group: true },
-    });
-    logger.debug('Membership found', { membership });
+      // First check if member exists
+      const member = await this.prisma.member.findUnique({
+        where: { whatsappId },
+      });
+      logger.debug('Member found', { member });
 
-    if (!membership) return null;
+      const membership = await this.prisma.membership.findFirst({
+        where: {
+          member: { whatsappId },
+          isOwner: true,
+        },
+        include: { group: true },
+      });
+      logger.debug('Membership found', { membership });
 
-    return membership.group;
-  } catch (error) {
-    throw ErrorHandler.handle(error, logger, {
-      operation: 'getOwnedGroupByMemberWhatsappId',
-      whatsappId,
-    });
+      if (!membership) return null;
+
+      return membership.group;
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, {
+        operation: 'getOwnedGroupByMemberWhatsappId',
+        whatsappId,
+      });
+    }
   }
-}
 async getOwnedGroupByMemberAndGroupName(whatsappId: string, groupName: string) {
   const membership = await this.prisma.membership.findFirst({
     where: {
-      isOwner: true,
+      isAdmin: true,  // Antes isOwner: true, parece q ngm e dono de nada, entao deixei isAdmin
       member: { whatsappId },
       group: { name: { contains: groupName, mode: 'insensitive' } },
     },
@@ -138,6 +138,14 @@ async getOwnedGroupByMemberAndGroupName(whatsappId: string, groupName: string) {
 
   return membership?.group ?? null;
 }
+  async getMembershipByWhatsappIdAndGroup(whatsappId: string, groupId: number) {
+    return await this.prisma.membership.findFirst({
+      where: {
+        member: { whatsappId },
+        groupId,
+      },
+    });
+  }
   async upsertMember(data: { whatsappId: string; whatsappNumber: string }) {
     return await this.prisma.member.upsert({
       where: { whatsappId: data.whatsappId },

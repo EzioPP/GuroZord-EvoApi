@@ -1,6 +1,10 @@
 import { handleMessagesUpsert } from './handle.message.upsert';
-import { EvolutionMessageData } from '@/types/evolution.types';
+import { handleGroupParticipantsUpdate } from './group.participants.update';
+import { AnyEvolutionWebhook } from '@/types/evolution.types';
 
-export const eventHandlers: Record<string, (data: EvolutionMessageData) => Promise<void>> = {
-  'messages.upsert': handleMessagesUpsert,
+type EventHandler = (data: AnyEvolutionWebhook['data']) => Promise<void>;
+
+export const eventHandlers: Record<string, EventHandler> = {
+  'messages.upsert': handleMessagesUpsert as EventHandler,
+  'group-participants.update': handleGroupParticipantsUpdate as EventHandler,
 };

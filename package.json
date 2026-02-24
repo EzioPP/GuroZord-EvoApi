@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon --exec ts-node -r tsconfig-paths/register src/index.ts",
-    "build": "tsc",
+    "build": "tsc && cp generated/prisma/*.node dist/generated/prisma/",
     "start": "node -r module-alias/register dist/src/index.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

@@ -14,9 +14,18 @@ export class GroupService {
 
   async changeOpenCloseTimes(groupId: number, openTime: string, closeTime: string) {
     if (!groupId) throw new ValidationError('Group ID is required', { groupId });
-    if (!openTime || !closeTime) throw new ValidationError('Both openTime and closeTime are required', { groupId, openTime, closeTime });
+    if (!openTime || !closeTime)
+      throw new ValidationError('Both openTime and closeTime are required', {
+        groupId,
+        openTime,
+        closeTime,
+      });
 
-    this.logger.info('Service: Changing open/close times for group', { groupId, openTime, closeTime });
+    this.logger.info('Service: Changing open/close times for group', {
+      groupId,
+      openTime,
+      closeTime,
+    });
 
     const updateData: GroupUpdateInput = { openTime, closeTime };
     const result = await this.groupRepository.updateGroupSettings(groupId, updateData);
@@ -77,55 +86,92 @@ export class GroupService {
   async getOwnedGroupByMemberAndGroupName(whatsappId: string, groupName: string) {
     if (!whatsappId) throw new ValidationError('WhatsApp ID is required', { whatsappId });
     if (!groupName) throw new ValidationError('Group name is required', { groupName });
-    this.logger.debug('Service: Fetching owned group by member and group name', { whatsappId, groupName });
+    this.logger.debug('Service: Fetching owned group by member and group name', {
+      whatsappId,
+      groupName,
+    });
     return await this.groupRepository.getOwnedGroupByMemberAndGroupName(whatsappId, groupName);
   }
+async syncGroups() {
+  this.logger.info('Service: Checking and syncing groups with WhatsApp');
 
-  async syncGroups() {
-    this.logger.info('Service: Checking and syncing groups with WhatsApp');
-    const whatsappGroups = await this.whatsappClient.findGroups();
-    const dbGroups = await this.groupRepository.getAllGroups();
-    const dbWhatsappIds = dbGroups.map((g) => g.whatsappId);
+  const whatsappGroups = await this.whatsappClient.findGroups();
+  const dbGroups = await this.groupRepository.getAllGroups();
+  const dbWhatsappIds = dbGroups.map((g) => g.whatsappId);
 
-    for (const group of whatsappGroups) {
-      const participants = await this.whatsappClient.findGroupParticipants(group.whatsappId);
-      const owner = participants.find((p) => p.role === 'superadmin');
-
-      if (!owner) {
-        this.logger.info('Group has no owner, skipping', { whatsappId: group.whatsappId });
-        continue;
-      }
-
-      const member = await this.groupRepository.upsertMember({
-        whatsappId: owner.whatsappId,
-        whatsappNumber: owner.whatsappId.split('@')[0],
-      });
-
-
-let dbGroup = dbGroups.find((g) => g.whatsappId === group.whatsappId);
-
-if (!dbWhatsappIds.includes(group.whatsappId)) {
-  this.logger.info('Creating group', { whatsappId: group.whatsappId, name: group.name });
-  dbGroup = await this.groupRepository.createWithDefaultSettings(group.name, group.whatsappId);
-} else if (dbGroup && dbGroup.name !== group.name) {
-  this.logger.info('Group name changed, updating', {
-    whatsappId: group.whatsappId,
-    oldName: dbGroup.name,
-    newName: group.name,
+  this.logger.info('Service: Syncing groups', {
+    whatsappGroupCount: whatsappGroups.length,
+    dbGroupCount: dbGroups.length,
   });
-  dbGroup = await this.groupRepository.updateGroupSettings(dbGroup.groupId, { name: group.name });
-}
 
-      await this.groupRepository.upsertMembership({
-        memberId: member.memberId,
-        groupId: dbGroup!.groupId,
-        isOwner: true,
-        isAdmin: true,
+  for (const group of whatsappGroups) {
+    const participants = await this.whatsappClient.findGroupParticipants(group.whatsappId);
+    const owner = participants.find((p) => p.role === 'superadmin');
+
+    if (!owner) {
+      this.logger.info('Group has no owner, syncing without owner', {
+        whatsappId: group.whatsappId,
       });
-
-      this.logger.info('Synced group', { whatsappId: group.whatsappId, ownerWhatsappId: owner.whatsappId });
     }
+
+    // Upsert ALL participants as members
+    const upsertedMembers = await Promise.all(
+      participants.map((p) =>
+        this.groupRepository.upsertMember({
+          whatsappId: p.whatsappId,
+          whatsappNumber: p.whatsappId.split('@')[0],
+        }),
+      ),
+    );
+
+    let dbGroup = dbGroups.find((g) => g.whatsappId === group.whatsappId);
+
+    if (!dbWhatsappIds.includes(group.whatsappId)) {
+      this.logger.info('Creating group', { whatsappId: group.whatsappId, name: group.name });
+      dbGroup = await this.groupRepository.createWithDefaultSettings(
+        group.name,
+        group.whatsappId,
+      );
+    } else if (dbGroup && dbGroup.name !== group.name) {
+      this.logger.info('Group name changed, updating', {
+        whatsappId: group.whatsappId,
+        oldName: dbGroup.name,
+        newName: group.name,
+      });
+      dbGroup = await this.groupRepository.updateGroupSettings(dbGroup.groupId, {
+        name: group.name,
+      });
+    }
+
+    // Upsert memberships for ALL participants
+    await Promise.all(
+      participants.map((p, i) => {
+        const isOwner = p.role === 'superadmin';
+        const isAdmin = p.role === 'admin' || isOwner;
+        return this.groupRepository.upsertMembership({
+          memberId: upsertedMembers[i].memberId,
+          groupId: dbGroup!.groupId,
+          isOwner,
+          isAdmin,
+        });
+      }),
+    );
+
+    this.logger.info('Synced group', {
+      whatsappId: group.whatsappId,
+      participantCount: participants.length,
+      ownerWhatsappId: owner?.whatsappId ?? null,
+    });
+  }
 
     this.logger.info('Service: Group sync complete');
   }
+  // group.service.ts
+async isMemberAdmin(whatsappId: string, groupId: number): Promise<boolean> {
+  const membership = await this.groupRepository.getMembershipByWhatsappIdAndGroup(
+    whatsappId,
+    groupId,
+  );
+  return membership?.isAdmin ?? false;
+}
 }

@@ -9,7 +9,7 @@ export class EvolutionClient implements WhatsappClient {
 
   constructor(
     baseUrl: string = process.env.EVOLUTION_API_URL ?? 'http://localhost:8081',
-    instance: string = process.env.EVOLUTION_INSTANCE ?? 'gurozord',
+    instance: string = process.env.EVOLUTION_INSTANCE ?? 'gurozorg',
     apiKey: string = process.env.AUTHENTICATION_API_KEY!,
   ) {
     this.baseUrl = baseUrl;
