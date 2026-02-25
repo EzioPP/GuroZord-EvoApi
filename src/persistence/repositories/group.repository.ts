@@ -228,4 +228,20 @@ export class GroupRepository {
       throw ErrorHandler.handle(error, logger, { operation: 'incrementMessageCount', whatsappId, groupWhatsappId });
     }
   }
+
+
+  async getTopActiveMembers(groupWhatsappId: string, limit: number) {
+    try {
+      const group = await this.prisma.group.findUnique({ where: { whatsappId: groupWhatsappId } });
+      if (!group) throw new NotFoundError('Group not found', { groupWhatsappId });
+      return await this.prisma.membership.findMany({
+        where: { groupId: group.groupId, isActive: true },
+        orderBy: { messageCount: 'desc' },
+        take: limit,
+        include: { member: true },
+      });
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, { operation: 'getTopActiveMembers', groupWhatsappId, limit });
+    }
+  }
 }

@@ -172,6 +172,17 @@ export class GroupService {
     });
   }
 
+  async getTopActiveMembers(groupWhatsappId: string, limit: number) {
+    if (!groupWhatsappId) throw new ValidationError('Group WhatsApp ID is required', { groupWhatsappId });
+    if (limit <= 0) throw new ValidationError('Limit must be greater than 0', { groupWhatsappId, limit });
+    this.logger.info('Service: Fetching top active members for group', { groupWhatsappId, limit });
+    const results = await this.groupRepository.getTopActiveMembers(groupWhatsappId, limit);
+    return results.map((r) => ({
+      whatsappNumber: r.member.whatsappNumber,
+      messageCount: r.messageCount,
+    }));
+  }
+
   async removeMembership(whatsappId: string, groupWhatsappId: string) {
     if (!whatsappId) throw new ValidationError('WhatsApp ID is required', { whatsappId });
     if (!groupWhatsappId) throw new ValidationError('Group WhatsApp ID is required', { groupWhatsappId });
