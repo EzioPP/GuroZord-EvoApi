@@ -50,6 +50,7 @@ services:
     environment:
       - DATABASE_CONNECTION_URI=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/evolution
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/evolution
+      - TZ=UTC
     volumes:
       - evolution_instances:/evolution/instances
 
