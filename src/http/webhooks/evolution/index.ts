@@ -14,7 +14,6 @@ export async function evolutionWebhookRoutes(app: FastifyInstance) {
     const result = AnyEvolutionWebhookSchema.safeParse(request.body);
 
     if (!result.success) {
-      logger.warn('Unknown or invalid webhook event', { error: result.error.flatten(), body: request.body });
       return reply.send({ status: 'ok' });
     }
 

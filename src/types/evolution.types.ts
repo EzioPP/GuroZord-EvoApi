@@ -9,12 +9,13 @@ const BaseWebhookSchema = z.object({
   server_url: z.string().optional(),
   apikey: z.string().optional(),
 });
-
+// evolution.types.ts - update EvolutionMessageDataSchema
 export const EvolutionMessageDataSchema = z.object({
   key: z.object({
     remoteJid: z.string(),
     fromMe: z.boolean(),
     id: z.string(),
+    participant: z.string().optional(), // sender in group messages
   }),
   pushName: z.string().optional(),
   message: z

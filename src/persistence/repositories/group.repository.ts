@@ -1,9 +1,8 @@
 import { PrismaClient } from '@@/generated/prisma/client';
 import logger from '@/lib/logger';
 import { ErrorHandler } from '@/lib/error-handler';
-import { NotFoundError, ValidationError } from '@/lib/errors';
+import { NotFoundError } from '@/lib/errors';
 import type { GroupUpdateInput } from '@/types/repository.types';
-import { is } from 'zod/v4/locales';
 
 export class GroupRepository {
   constructor(private prisma: PrismaClient) {}
@@ -11,19 +10,8 @@ export class GroupRepository {
   async findGroupSettings(groupId: number) {
     try {
       logger.debug('Repository: Fetching group settings', { groupId });
-
-      if (!groupId) {
-        throw new ValidationError('Group ID is required', { groupId });
-      }
-
-      const group = await this.prisma.group.findUnique({
-        where: { groupId: groupId },
-      });
-
-      if (!group) {
-        throw new NotFoundError('Group not found', { groupId });
-      }
-
+      const group = await this.prisma.group.findUnique({ where: { groupId } });
+      if (!group) throw new NotFoundError('Group not found', { groupId });
       return group;
     } catch (error) {
       throw ErrorHandler.handle(error, logger, { operation: 'findGroupSettings', groupId });
@@ -33,14 +21,8 @@ export class GroupRepository {
   async getGroupById(groupId: number) {
     try {
       logger.debug('Repository: Getting group by ID', { groupId });
-      const group = await this.prisma.group.findUnique({
-        where: { groupId: groupId },
-      });
-
-      if (!group) {
-        throw new NotFoundError('Group not found', { groupId });
-      }
-
+      const group = await this.prisma.group.findUnique({ where: { groupId } });
+      if (!group) throw new NotFoundError('Group not found', { groupId });
       return group;
     } catch (error) {
       throw ErrorHandler.handle(error, logger, { operation: 'getGroupById', groupId });
@@ -50,27 +32,21 @@ export class GroupRepository {
   async getGroupByWhatsappId(whatsappId: string) {
     try {
       logger.debug('Repository: Getting group by WhatsApp ID', { whatsappId });
-      const group = await this.prisma.group.findUnique({
-        where: { whatsappId: whatsappId },
-      });
-
-      if (!group) {
-        throw new NotFoundError('Group not found', { whatsappId });
-      }
-
+      const group = await this.prisma.group.findUnique({ where: { whatsappId } });
+      if (!group) throw new NotFoundError('Group not found', { whatsappId });
       return group;
     } catch (error) {
       throw ErrorHandler.handle(error, logger, { operation: 'getGroupByWhatsappId', whatsappId });
     }
   }
+
   async getRegisteredOwners(groupId: number) {
     try {
       logger.debug('Repository: Fetching registered group owners', { groupId });
-      const owners = await this.prisma.membership.findMany({
-        where: { groupId: groupId, isOwner: true },
+      return await this.prisma.membership.findMany({
+        where: { groupId, isOwner: true },
         include: { member: true },
       });
-      return owners;
     } catch (error) {
       throw ErrorHandler.handle(error, logger, { operation: 'getRegisteredOwners', groupId });
     }
@@ -78,83 +54,89 @@ export class GroupRepository {
 
   async updateGroupSettings(groupId: number, data: GroupUpdateInput) {
     try {
-      const group = await this.prisma.group.findUnique({
-        where: { groupId: groupId },
-      });
-      if (!group) {
-        throw new NotFoundError('Group not found', { groupId });
-      }
       logger.debug('Repository: Updating group settings', { groupId });
-      return await this.prisma.group.update({
-        where: { groupId: groupId },
-        data,
-      });
+      const group = await this.prisma.group.findUnique({ where: { groupId } });
+      if (!group) throw new NotFoundError('Group not found', { groupId });
+      return await this.prisma.group.update({ where: { groupId }, data });
     } catch (error) {
-      throw ErrorHandler.handle(error, logger, {
-        operation: 'updateGroupSettings',
-        groupId,
-      });
+      throw ErrorHandler.handle(error, logger, { operation: 'updateGroupSettings', groupId });
     }
   }
-  // group.repository.ts
+
   async getOwnedGroupByMemberWhatsappId(whatsappId: string) {
     try {
       logger.debug('Repository: Fetching owned group by member WhatsApp ID', { whatsappId });
-
-      // First check if member exists
-      const member = await this.prisma.member.findUnique({
-        where: { whatsappId },
+      const membership = await this.prisma.membership.findFirst({
+        where: { member: { whatsappId }, isOwner: true },
+        include: { group: true },
       });
-      logger.debug('Member found', { member });
+      return membership?.group ?? null;
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, { operation: 'getOwnedGroupByMemberWhatsappId', whatsappId });
+    }
+  }
 
+  async getOwnedGroupByMemberAndGroupName(whatsappId: string, groupName: string) {
+    try {
       const membership = await this.prisma.membership.findFirst({
         where: {
-          member: { whatsappId },
-          isOwner: true,
+          isAdmin: true,
+          member: {
+            OR: [{ whatsappId }, { whatsappLid: whatsappId }],
+          },
+          group: { name: { contains: groupName, mode: 'insensitive' } },
         },
         include: { group: true },
       });
-      logger.debug('Membership found', { membership });
-
-      if (!membership) return null;
-
-      return membership.group;
+      return membership?.group ?? null;
     } catch (error) {
-      throw ErrorHandler.handle(error, logger, {
-        operation: 'getOwnedGroupByMemberWhatsappId',
-        whatsappId,
-      });
+      throw ErrorHandler.handle(error, logger, { operation: 'getOwnedGroupByMemberAndGroupName', whatsappId, groupName });
     }
   }
-async getOwnedGroupByMemberAndGroupName(whatsappId: string, groupName: string) {
-  const membership = await this.prisma.membership.findFirst({
-    where: {
-      isAdmin: true,  // Antes isOwner: true, parece q ngm e dono de nada, entao deixei isAdmin
-      member: { whatsappId },
-      group: { name: { contains: groupName, mode: 'insensitive' } },
-    },
-    include: { group: true },
-  });
 
-  return membership?.group ?? null;
-}
   async getMembershipByWhatsappIdAndGroup(whatsappId: string, groupId: number) {
-    return await this.prisma.membership.findFirst({
-      where: {
-        member: { whatsappId },
-        groupId,
-      },
-    });
+    try {
+      return await this.prisma.membership.findFirst({
+        where: {
+          member: {
+            OR: [{ whatsappId }, { whatsappLid: whatsappId }],
+          },
+          groupId,
+        },
+      });
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, { operation: 'getMembershipByWhatsappIdAndGroup', whatsappId, groupId });
+    }
   }
-  async upsertMember(data: { whatsappId: string; whatsappNumber: string }) {
-    return await this.prisma.member.upsert({
-      where: { whatsappId: data.whatsappId },
-      update: {},
-      create: {
-        whatsappId: data.whatsappId,
-        whatsappNumber: data.whatsappNumber,
-      },
-    });
+
+  async findMemberByWhatsappIdOrLid(whatsappId: string) {
+    try {
+      return await this.prisma.member.findFirst({
+        where: {
+          OR: [{ whatsappId }, { whatsappLid: whatsappId }],
+        },
+      });
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, { operation: 'findMemberByWhatsappIdOrLid', whatsappId });
+    }
+  }
+
+  async upsertMember(data: { whatsappId: string; whatsappNumber: string; whatsappLid?: string }) {
+    try {
+      return await this.prisma.member.upsert({
+        where: { whatsappId: data.whatsappId },
+        update: {
+          ...(data.whatsappLid && { whatsappLid: data.whatsappLid }),
+        },
+        create: {
+          whatsappId: data.whatsappId,
+          whatsappNumber: data.whatsappNumber,
+          whatsappLid: data.whatsappLid,
+        },
+      });
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, { operation: 'upsertMember', ...data });
+    }
   }
 
   async upsertMembership(data: {
@@ -163,45 +145,41 @@ async getOwnedGroupByMemberAndGroupName(whatsappId: string, groupName: string) {
     isOwner: boolean;
     isAdmin: boolean;
   }) {
-    return await this.prisma.membership.upsert({
-      where: {
-        memberId_groupId: {
+    try {
+      return await this.prisma.membership.upsert({
+        where: {
+          memberId_groupId: { memberId: data.memberId, groupId: data.groupId },
+        },
+        update: {
+          isActive: true,
+          dtLeft: null,
+          dtJoined: new Date(),
+          isOwner: data.isOwner,
+          isAdmin: data.isAdmin,
+        },
+        create: {
           memberId: data.memberId,
           groupId: data.groupId,
-        },
-      },
-      update: {},
-      create: {
-        memberId: data.memberId,
-        groupId: data.groupId,
-        isOwner: data.isOwner,
-        isAdmin: data.isAdmin,
-      },
-    });
-  }
-  async createWithDefaultSettings(name: string, whatsappId: string) {
-    try {
-      if (!name) {
-        throw new ValidationError('Group name is required', { name });
-      }
-
-      logger.debug('Repository: Creating default group settings', { name });
-      return await this.prisma.group.create({
-        data: {
-          name,
-          whatsappId,
-          openTime: '09:00',
-          closeTime: '17:00',
+          isOwner: data.isOwner,
+          isAdmin: data.isAdmin,
         },
       });
     } catch (error) {
-      throw ErrorHandler.handle(error, logger, {
-        operation: 'createWithDefaultSettings',
-        name,
-        whatsappId,
-      });
+      throw ErrorHandler.handle(error, logger, { operation: 'upsertMembership', ...data });
     }
   }
+
+  async createWithDefaultSettings(name: string, whatsappId: string) {
+    try {
+      logger.debug('Repository: Creating default group settings', { name });
+      return await this.prisma.group.create({
+        data: { name, whatsappId, openTime: '09:00', closeTime: '17:00' },
+      });
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, { operation: 'createWithDefaultSettings', name, whatsappId });
+    }
+  }
+
   async getAllGroups() {
     try {
       logger.debug('Repository: Fetching all groups');
@@ -214,17 +192,40 @@ async getOwnedGroupByMemberAndGroupName(whatsappId: string, groupName: string) {
   async getUserByWhatsappId(whatsappId: string) {
     try {
       logger.debug('Repository: Fetching user by WhatsApp ID', { whatsappId });
-      const user = await this.prisma.member.findUnique({
-        where: { whatsappId: whatsappId },
-      });
-
-      if (!user) {
-        throw new NotFoundError('User not found', { whatsappId });
-      }
-
+      const user = await this.prisma.member.findUnique({ where: { whatsappId } });
+      if (!user) throw new NotFoundError('User not found', { whatsappId });
       return user;
     } catch (error) {
       throw ErrorHandler.handle(error, logger, { operation: 'getUserByWhatsappId', whatsappId });
+    }
+  }
+
+  async deleteMembership(whatsappId: string, groupWhatsappId: string) {
+    try {
+      const member = await this.findMemberByWhatsappIdOrLid(whatsappId);
+      const group = await this.prisma.group.findUnique({ where: { whatsappId: groupWhatsappId } });
+      if (!member || !group) return null;
+      return await this.prisma.membership.updateMany({
+        where: { memberId: member.memberId, groupId: group.groupId },
+        data: { isActive: false, dtLeft: new Date() },
+      });
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, { operation: 'deleteMembership', whatsappId, groupWhatsappId });
+    }
+  }
+
+  async incrementMessageCount(whatsappId: string, groupWhatsappId: string) {
+    try {
+      const member = await this.findMemberByWhatsappIdOrLid(whatsappId);
+      const group = await this.prisma.group.findUnique({ where: { whatsappId: groupWhatsappId } });
+      logger.debug('Incrementing message count', { whatsappId, groupWhatsappId, memberId: member?.memberId });
+      if (!member || !group) return null;
+      return await this.prisma.membership.updateMany({
+        where: { memberId: member.memberId, groupId: group.groupId, isActive: true },
+        data: { messageCount: { increment: 1 }, dtLastMessage: new Date() },
+      });
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, { operation: 'incrementMessageCount', whatsappId, groupWhatsappId });
     }
   }
 }

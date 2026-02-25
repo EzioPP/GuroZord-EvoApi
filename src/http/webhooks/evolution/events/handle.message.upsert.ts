@@ -2,15 +2,18 @@ import { EvolutionMessageData } from '@/types/evolution.types';
 import logger from '@/lib/logger';
 import { Services } from '@/factory';
 import { ConfigSchema } from '@/types/group.types';
-
 export async function handleMessagesUpsert(data: EvolutionMessageData) {
   if (data.key.fromMe) return;
-
-  const senderId = data.key.remoteJid;
-  const message = data.message?.conversation;
+  logger.info('Handling messages.upsert event', { data});
+  const isGroupMessage = data.key.remoteJid.endsWith('@g.us');
+  const groupWhatsappId = isGroupMessage ? data.key.remoteJid : null;
+  const senderId = isGroupMessage
+    ? (data.key.participant ?? data.key.remoteJid)
+    : data.key.remoteJid;
   const senderNumber = senderId.split('@')[0];
+  const message = data.message?.conversation;
 
-  logger.info('Extracted sender number', { senderNumber });
+  logger.info('Extracted sender', { senderNumber, isGroupMessage, groupWhatsappId });
   if (!message) return;
 
   const msg = message.trim().toLowerCase();
@@ -18,16 +21,19 @@ export async function handleMessagesUpsert(data: EvolutionMessageData) {
   const isAdmin =
     process.env.NODE_ENV !== 'development' || senderId === process.env.TEST_WHATSAPP_NUMBER;
 
+  if (groupWhatsappId) {
+    await Services.groupService
+      .incrementMessageCount(senderId, groupWhatsappId)
+      .catch(() => null);
+  }
+
   if (msg.startsWith('hello')) {
-    logger.info('Message contains "hello"', { message });
     await Services.messageService.sendMessage(senderNumber, 'world');
   }
   if (msg.startsWith('whoami')) {
-    logger.info('Message contains "whoami"', { message });
     await Services.messageService.sendMessage(senderNumber, `You are ${senderNumber}`);
   }
   if (msg.startsWith('gurozord')) {
-    logger.info('Message contains "gurozord"', { message });
     await Services.messageService.sendMessage(
       senderNumber,
       'Do caos veio a ordem! Sou um bot de moderação criado pelo Guro, automatize suas ideias!\nguronaive.com',
@@ -37,13 +43,11 @@ export async function handleMessagesUpsert(data: EvolutionMessageData) {
   if (!isAdmin) return;
 
   if (msg.startsWith('get groups')) {
-    logger.info('Message starts with "get groups"', { message });
     const groups = await Services.groupService.getAllGroupsWhatsapp();
     const groupNames = groups.map((g) => g.name).join(', ');
     await Services.messageService.sendMessage(senderNumber, `Groups: ${groupNames}`);
   }
   if (msg.startsWith('sync')) {
-    logger.info('Message starts with "sync"', { message });
     await Services.groupService.syncGroups();
     await Services.messageService.sendMessage(senderNumber, 'Groups synchronized.');
   }

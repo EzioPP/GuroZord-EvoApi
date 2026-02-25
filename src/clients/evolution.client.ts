@@ -74,7 +74,7 @@ export class EvolutionClient implements WhatsappClient {
     }
   }
 
-async findGroupParticipants(groupJid: string): Promise<{ whatsappId: string; role: 'admin' | 'superadmin' | null }[]> {
+async findGroupParticipants(groupJid: string): Promise<{ whatsappId: string; lid?: string; role: 'admin' | 'superadmin' | null }[]> {
   logger.info('Fetching group participants from Evolution API', { groupJid });
 
   const response = await fetch(
@@ -95,10 +95,11 @@ async findGroupParticipants(groupJid: string): Promise<{ whatsappId: string; rol
   }
 
   const data = JSON.parse(responseText);
-  return data.participants.map((p: any) => ({
-    whatsappId: p.phoneNumber,
-    role: p.admin ?? null,
-  }));
+return data.participants.map((p: any) => ({
+  whatsappId: p.phoneNumber,
+  lid: p.id ?? undefined,
+  role: p.admin ?? null,
+}));
 }
   async openGroup(groupId: string): Promise<void> {
     logger.info('Opening group via Evolution API', { groupId });

@@ -19,6 +19,7 @@ datasource db {
 model Member {
   memberId       Int          @id @default(autoincrement()) @map("id")
   whatsappId     String       @map("whatsapp_id") @unique
+  whatsappLid  String?  @map("whatsapp_lid") @unique
   whatsappNumber String       @map("whatsapp_number")
   name           String?
   memberships    Membership[]
