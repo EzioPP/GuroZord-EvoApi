@@ -27,7 +27,7 @@ const eventAge = (Date.now() - new Date(result.data.date_time).getTime()) / 1000
     if (handler) {
       await handler(result.data.data);
     } else {
-      logger.debug('No handler for event', { event: result.data.event });
+      //logger.debug('No handler for event', { event: result.data.event });
     }
 
     reply.send({ status: 'ok' });

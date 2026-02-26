@@ -5,8 +5,6 @@ import { ConfigSchema } from '@/types/group.types';
 
 export async function handleMessagesUpsert(data: EvolutionMessageData) {
   if (data.key.fromMe) return;
-  logger.info('Handling messages.upsert event', { data });
-
   const isGroupMessage = data.key.remoteJid.endsWith('@g.us');
   const groupWhatsappId = isGroupMessage ? data.key.remoteJid : null;
   const senderId = isGroupMessage ? (data.key.participant ?? data.key.remoteJid) : data.key.remoteJid;
