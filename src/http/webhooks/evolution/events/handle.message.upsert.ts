@@ -2,6 +2,7 @@ import { EvolutionMessageData } from '@/types/evolution.types';
 import logger from '@/lib/logger';
 import { Services } from '@/factory';
 import { ConfigSchema } from '@/types/group.types';
+import { Messages } from '@/lib/messages';
 
 export async function handleMessagesUpsert(data: EvolutionMessageData) {
   if (data.key.fromMe) return;
@@ -43,17 +44,15 @@ export async function handleMessagesUpsert(data: EvolutionMessageData) {
       'Do caos veio a ordem! Sou um bot de moderação criado pelo Guro, automatize suas ideias!\nguronaive.com',
     );
   }
-
-  if (msg.startsWith('/top')) {
-    const medals = ['🥇', '🥈', '🥉', '4.', '5.'];
-    if (!groupWhatsappId) return;
-
-    const topMembers = await Services.groupService.getTopActiveMembers(groupWhatsappId, 5);
-    const topList = topMembers
-      .map((m, index) => `${medals[index]} ${m.whatsappNumber} - ${m.messageCount} Mensagens`)
-      .join('\n');
-    await Services.messageService.sendMessage(replyTo, `Top membros ativos:\n${topList}`);
+if (msg.startsWith('/top')) {
+  if (!groupWhatsappId) return;
+  const topMembers = await Services.groupService.getTopActiveMembers(groupWhatsappId, 10);
+  if (topMembers.length === 0) {
+    await Services.messageService.sendMessage(replyTo, Messages.top.empty);
+    return;
   }
+  await Services.messageService.sendMessage(replyTo, Messages.top.build(topMembers));
+}
   if (!isAdmin) return;
 
   if (msg.startsWith('/get groups')) {
