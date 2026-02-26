@@ -74,35 +74,40 @@ export class EvolutionClient implements WhatsappClient {
     }
   }
 
-  async findGroupParticipants(
-    groupJid: string,
-  ): Promise<{ whatsappId: string; lid?: string; role: 'admin' | 'superadmin' | null }[]> {
-    logger.info('Fetching group participants from Evolution API', { groupJid });
+async findGroupParticipants(
+  groupJid: string,
+): Promise<{ whatsappId: string; lid?: string; role: 'admin' | 'superadmin' | null }[]> {
+  logger.info('Fetching group participants from Evolution API', { groupJid });
 
-    const response = await fetch(
-      `${this.baseUrl}/group/participants/${this.instance}?groupJid=${groupJid}`,
-      {
-        method: 'GET',
-        headers: { apikey: this.apiKey },
-      },
-    );
+  const response = await fetch(
+    `${this.baseUrl}/group/participants/${this.instance}?groupJid=${groupJid}`,
+    {
+      method: 'GET',
+      headers: { apikey: this.apiKey },
+    },
+  );
 
-    const responseText = await response.text();
-    logger.info('Evolution API findGroupParticipants response', {
-      status: response.status,
-      body: responseText,
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to fetch participants: ${response.status} - ${responseText}`);
-    }
+  const responseText = await response.text();
+  logger.info('Evolution API findGroupParticipants response', {
+    status: response.status,
+    body: responseText,
+  });
 
-    const data = JSON.parse(responseText);
-    return data.participants.map((p: any) => ({
-      whatsappId: p.phoneNumber,
-      lid: p.id ?? undefined,
-      role: p.admin ?? null,
-    }));
+  if (!response.ok) {
+    throw new Error(`Failed to fetch participants: ${response.status} - ${responseText}`);
   }
+
+  const data = JSON.parse(responseText);
+  return data.participants.map((p: any) => {
+    const hasPhone = !!p.phoneNumber;
+    return {
+      whatsappId: p.phoneNumber ?? p.id,
+      lid: hasPhone && p.id?.endsWith('@lid') ? p.id : undefined,
+      role: p.admin ?? null,
+    };
+  });
+}
+
   async openGroup(groupId: string): Promise<void> {
     logger.info('Opening group via Evolution API', { groupId });
 

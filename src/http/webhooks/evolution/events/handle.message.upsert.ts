@@ -7,7 +7,9 @@ export async function handleMessagesUpsert(data: EvolutionMessageData) {
   if (data.key.fromMe) return;
   const isGroupMessage = data.key.remoteJid.endsWith('@g.us');
   const groupWhatsappId = isGroupMessage ? data.key.remoteJid : null;
-  const senderId = isGroupMessage ? (data.key.participant ?? data.key.remoteJid) : data.key.remoteJid;
+  const senderId = isGroupMessage
+    ? (data.key.participant ?? data.key.remoteJid)
+    : data.key.remoteJid;
   const senderNumber = senderId.split('@')[0];
   const replyTo = groupWhatsappId ?? senderId;
   const message = data.message?.conversation;
@@ -18,15 +20,14 @@ export async function handleMessagesUpsert(data: EvolutionMessageData) {
 
   const msg = message.trim().toLowerCase();
 
+  if (groupWhatsappId) {
+    await Services.groupService.incrementMessageCount(senderId, groupWhatsappId).catch(() => null);
+  }
+
   if (!msg.startsWith('/')) return;
 
-  const isAdmin = process.env.NODE_ENV !== 'development' || senderId === process.env.TEST_WHATSAPP_NUMBER;
-
-  if (groupWhatsappId) {
-    await Services.groupService
-      .incrementMessageCount(senderId, groupWhatsappId)
-      .catch(() => null);
-  }
+  const isAdmin =
+    process.env.NODE_ENV !== 'development' || senderId === process.env.TEST_WHATSAPP_NUMBER;
 
   if (msg.startsWith('/hello')) {
     await Services.messageService.sendMessage(replyTo, 'world');
@@ -42,17 +43,17 @@ export async function handleMessagesUpsert(data: EvolutionMessageData) {
       'Do caos veio a ordem! Sou um bot de moderação criado pelo Guro, automatize suas ideias!\nguronaive.com',
     );
   }
-  
-  if (msg.startsWith('/top')) {
-  const medals = ['🥇', '🥈', '🥉', '4.', '5.'];
-  if (!groupWhatsappId) return;
 
-  const topMembers = await Services.groupService.getTopActiveMembers(groupWhatsappId, 5);
-  const topList = topMembers
-    .map((m, index) => `${medals[index]} ${m.whatsappNumber} - ${m.messageCount} Mensagens`)
-    .join('\n');
-  await Services.messageService.sendMessage(replyTo, `Top membros ativos:\n${topList}`);
-}
+  if (msg.startsWith('/top')) {
+    const medals = ['🥇', '🥈', '🥉', '4.', '5.'];
+    if (!groupWhatsappId) return;
+
+    const topMembers = await Services.groupService.getTopActiveMembers(groupWhatsappId, 5);
+    const topList = topMembers
+      .map((m, index) => `${medals[index]} ${m.whatsappNumber} - ${m.messageCount} Mensagens`)
+      .join('\n');
+    await Services.messageService.sendMessage(replyTo, `Top membros ativos:\n${topList}`);
+  }
   if (!isAdmin) return;
 
   if (msg.startsWith('/get groups')) {
@@ -62,8 +63,17 @@ export async function handleMessagesUpsert(data: EvolutionMessageData) {
   }
 
   if (msg.startsWith('/sync')) {
-    await Services.groupService.syncGroups();
-    await Services.messageService.sendMessage(senderId, 'Groups synchronized.');
+    try {
+      await Services.groupService.syncGroups();
+      logger.info('Groups synchronized by command', { senderId });
+      await Services.messageService.sendMessage(senderId, 'Groups synchronized.');
+    } catch (err) {
+      logger.error('Failed to synchronize groups', { senderId, err });
+      await Services.messageService.sendMessage(
+        senderId,
+        'Failed to synchronize groups. Please try again later.',
+      );
+    }
   }
 
   if (msg.startsWith('/config')) {
