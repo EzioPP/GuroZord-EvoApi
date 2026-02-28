@@ -61,6 +61,18 @@ if (msg.startsWith('/top')) {
     await Services.messageService.sendMessage(senderId, `Groups: ${groupNames}`);
   }
 
+  if (msg.startsWith('/get all settings')) {
+    const groups = await Services.groupService.getAllGroups()
+    await Services.messageService.sendMessage(
+      senderId,
+      `Groups:\n${groups
+        .map(
+          (g) =>
+            `- ${g.name} (WhatsApp ID: ${g.whatsappId})\n  Open Time: ${g.openTime}\n  Close Time: ${g.closeTime}`,
+        )
+        .join('\n\n')}`,
+    );
+  }
   if (msg.startsWith('/sync')) {
     try {
       await Services.groupService.syncGroups();

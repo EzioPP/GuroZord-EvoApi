@@ -55,6 +55,11 @@ export class GroupService {
     return await this.whatsappClient.findGroups();
   }
 
+  async getAllGroups() {
+    this.logger.info('Service: Fetching all groups from database');
+    return await this.groupRepository.getAllGroups();
+  }
+
   async getGroupParticipants(whatsappId: string) {
     return await this.whatsappClient.findGroupParticipants(whatsappId);
   }
