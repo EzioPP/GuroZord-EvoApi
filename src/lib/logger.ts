@@ -1,8 +1,10 @@
+import 'dotenv/config';
 import winston, { Logger, format } from 'winston';
+import { env } from '../config/env';
 
 const { combine, timestamp, errors, colorize, printf, json } = format;
 
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = env.NODE_ENV === 'production';
 
 const devFormat = combine(
   colorize(),

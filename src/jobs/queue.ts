@@ -1,7 +1,8 @@
 import { Queue } from 'bullmq';
 import { URL } from 'url';
+import { env } from '../config/env';
 
-const redisUrl = new URL(process.env.REDIS_URI ?? 'redis://127.0.0.1:6380');
+const redisUrl = new URL(env.REDIS_URI);
 
 const redisConnection = {
   host: redisUrl.hostname,

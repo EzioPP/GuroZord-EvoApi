@@ -8,7 +8,6 @@ const STALE_EVENT_THRESHOLD_SECONDS = 30;
 
 export async function evolutionWebhookRoutes(app: FastifyInstance) {
   app.post('/webhook/evolution', async (request, reply) => {
-    logger.info('Received request on Evolution webhook endpoint');
 
     const result = AnyEvolutionWebhookSchema.safeParse(request.body);
 
@@ -18,7 +17,8 @@ export async function evolutionWebhookRoutes(app: FastifyInstance) {
 
 const eventAge = (Date.now() - new Date(result.data.date_time).getTime()) / 1000;
     if (eventAge > STALE_EVENT_THRESHOLD_SECONDS) {
-      logger.warn('Dropping stale event', { event: result.data.event, ageSeconds: Math.round(eventAge) });
+
+      logger.warn('Dropping stale event', { event: result.data.event, ageSeconds: Math.round(eventAge) , eventCreateTime: result.data.date_time});
       return reply.send({ status: 'ok' });
     }
 

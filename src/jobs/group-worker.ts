@@ -3,6 +3,7 @@ import type { Job } from 'bullmq';
 import logger from '@/lib/logger';
 import { redisConnection } from '@/jobs/queue';
 import { createGroupService } from '@/factory/services.factory';
+import { checkGroupInactivity } from '@/jobs/inactivity-check';
 
 let worker: Worker | null = null;
 
@@ -30,6 +31,11 @@ export const startGroupWorker = (): Worker => {
 
       if (job.name === 'sync-groups') {
         await groupService.syncGroups();
+        return;
+      }
+
+      if (job.name === 'check-inactivity') {
+        await checkGroupInactivity();
         return;
       }
 

@@ -38,6 +38,15 @@ export const scheduleGroupSyncJob = async (): Promise<void> => {
   );
   logger.info('group_sync_job_scheduled');
 };
+
+export const scheduleInactivityCheckJob = async (): Promise<void> => {
+  await groupJobsQueue.upsertJobScheduler(
+    'check-inactivity',
+    { pattern: '0 * * * *' }, // every hour
+    { name: 'check-inactivity', data: {} },
+  );
+  logger.info('inactivity_check_job_scheduled');
+};
 export const cancelGroupJobs = async (groupId: number): Promise<void> => {
   await groupJobsQueue.removeJobScheduler(toJobId('open', groupId.toString()));
   await groupJobsQueue.removeJobScheduler(toJobId('close', groupId.toString()));
@@ -45,14 +54,27 @@ export const cancelGroupJobs = async (groupId: number): Promise<void> => {
 };
 
 export const scheduleAllGroupJobs = async (): Promise<void> => {
-  const groups = await prisma.group.findMany({
-    where: {
-      AND: [{ openTime: { not: undefined } }, { closeTime: { not: undefined } }],
-    },
+  const openConfigs = await prisma.groupConfig.findMany({
+    where: { key: 'open_time', groupId: { not: null } },
   });
-  logger.info('group_jobs_boot_sync', { count: groups.length });
 
-  for (const group of groups) {
-    await scheduleGroupJobs(group.groupId, group.openTime!, group.closeTime!);
+  let scheduled = 0;
+  for (const openConfig of openConfigs) {
+    if (!openConfig.groupId) continue;
+    const closeConfig = await prisma.groupConfig.findUnique({
+      where: {
+        groupId_key_language: {
+          groupId: openConfig.groupId,
+          key: 'close_time',
+          language: openConfig.language,
+        },
+      },
+    });
+    if (closeConfig) {
+      await scheduleGroupJobs(openConfig.groupId, openConfig.value, closeConfig.value);
+      scheduled++;
+    }
   }
+
+  logger.info('group_jobs_boot_sync', { count: scheduled });
 };

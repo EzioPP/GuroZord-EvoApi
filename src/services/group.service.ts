@@ -1,15 +1,14 @@
 // group.service.ts
 import { Logger } from 'winston';
-import { GroupRepository } from '@/persistence';
-import type { GroupUpdateInput } from '@/types/repository.types';
+import { GroupRepository, GroupConfigRepository } from '@/persistence';
 import { ValidationError } from '@/lib/errors';
 import { cancelGroupJobs, scheduleGroupJobs } from '@/jobs/group-jobs';
 import { WhatsappClient } from '@/clients/whatsapp.client';
-import { tr } from 'zod/v4/locales';
 
 export class GroupService {
   constructor(
     private groupRepository: GroupRepository,
+    private groupConfigRepository: GroupConfigRepository,
     private whatsappClient: WhatsappClient,
     private logger: Logger,
   ) {}
@@ -27,27 +26,25 @@ export class GroupService {
       openTime,
       closeTime,
     });
-    const updateData: GroupUpdateInput = { openTime, closeTime };
-    const result = await this.groupRepository.updateGroupSettings(groupId, updateData);
+    await this.groupConfigRepository.upsertConfig(groupId, 'open_time', openTime);
+    await this.groupConfigRepository.upsertConfig(groupId, 'close_time', closeTime);
     await cancelGroupJobs(groupId);
     await scheduleGroupJobs(groupId, openTime, closeTime);
-    return result;
+    return { groupId, openTime, closeTime };
   }
 
   async openGroup(groupId: number) {
     if (!groupId) throw new ValidationError('Group ID is required', { groupId });
     this.logger.info('Service: Opening group', { groupId });
     const group = await this.groupRepository.getGroupById(groupId);
-    await this.whatsappClient.openGroup(group.whatsappId);
-    return await this.groupRepository.updateGroupSettings(groupId, { isClosed: false });
+    return await this.whatsappClient.openGroup(group.whatsappId);
   }
 
   async closeGroup(groupId: number) {
     if (!groupId) throw new ValidationError('Group ID is required', { groupId });
     this.logger.info('Service: Closing group', { groupId });
     const group = await this.groupRepository.getGroupById(groupId);
-    await this.whatsappClient.closeGroup(group.whatsappId);
-    return await this.groupRepository.updateGroupSettings(groupId, { isClosed: true });
+    return await this.whatsappClient.closeGroup(group.whatsappId);
   }
 
   async getAllGroupsWhatsapp() {
@@ -58,6 +55,11 @@ export class GroupService {
   async getAllGroups() {
     this.logger.info('Service: Fetching all groups from database');
     return await this.groupRepository.getAllGroups();
+  }
+
+  async getAllGroupsWithConfigs() {
+    this.logger.info('Service: Fetching all groups with configs from database');
+    return await this.groupRepository.getAllGroupsWithConfigs();
   }
 
   async getGroupParticipants(whatsappId: string) {
@@ -102,12 +104,9 @@ export class GroupService {
     try {
       this.logger.info('Service: Checking and syncing groups with WhatsApp');
       const whatsappGroups = await this.whatsappClient.findGroups();
-      const dbGroups = await this.groupRepository.getAllGroups();
-      const dbWhatsappIds = dbGroups.map((g) => g.whatsappId);
 
       this.logger.info('Service: Syncing groups', {
         whatsappGroupCount: whatsappGroups.length,
-        dbGroupCount: dbGroups.length,
       });
 
       for (const group of whatsappGroups) {
@@ -130,24 +129,7 @@ export class GroupService {
           ),
         );
 
-        let dbGroup = dbGroups.find((g) => g.whatsappId === group.whatsappId);
-
-        if (!dbWhatsappIds.includes(group.whatsappId)) {
-          this.logger.info('Creating group', { whatsappId: group.whatsappId, name: group.name });
-          dbGroup = await this.groupRepository.createWithDefaultSettings(
-            group.name,
-            group.whatsappId,
-          );
-        } else if (dbGroup && dbGroup.name !== group.name) {
-          this.logger.info('Group name changed, updating', {
-            whatsappId: group.whatsappId,
-            oldName: dbGroup.name,
-            newName: group.name,
-          });
-          dbGroup = await this.groupRepository.updateGroupSettings(dbGroup.groupId, {
-            name: group.name,
-          });
-        }
+        const dbGroup = await this.groupRepository.upsertGroup(group.name, group.whatsappId);
 
         await Promise.all(
           participants.map((p, i) => {
@@ -155,7 +137,7 @@ export class GroupService {
             const isAdmin = p.role === 'admin' || isOwner;
             return this.groupRepository.upsertMembership({
               memberId: upsertedMembers[i].memberId,
-              groupId: dbGroup!.groupId,
+              groupId: dbGroup.groupId,
               isOwner,
               isAdmin,
             });
@@ -226,6 +208,20 @@ export class GroupService {
       throw new ValidationError('Group WhatsApp ID is required', { groupWhatsappId });
     this.logger.info('Service: Removing membership', { whatsappId, groupWhatsappId });
     return await this.groupRepository.deleteMembership(whatsappId, groupWhatsappId);
+  }
+
+  async banMembersFromGroup(groupWhatsappId: string, memberWhatsappNumbers: string[]) {
+    if (!groupWhatsappId)
+      throw new ValidationError('Group WhatsApp ID is required', { groupWhatsappId });
+    if (!memberWhatsappNumbers.length)
+      throw new ValidationError('At least one member is required for banning', {
+        groupWhatsappId,
+      });
+    this.logger.info('Service: Banning members from group', {
+      groupWhatsappId,
+      memberCount: memberWhatsappNumbers.length,
+    });
+    return await this.whatsappClient.banFromGroup(groupWhatsappId, memberWhatsappNumbers);
   }
 
   async incrementMessageCount(whatsappId: string, groupWhatsappId: string) {
