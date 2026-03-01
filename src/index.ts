@@ -3,14 +3,14 @@ import 'module-alias/register';
 import { env } from './config/env';
 
 import app from './http/app';
-import { scheduleAllGroupJobs, scheduleInactivityCheckJob } from './jobs/group-jobs';
+import { scheduleAllGroupJobs, cancelInactivityCheckJob } from './jobs/group-jobs';
 import { startGroupWorker } from './jobs/group-worker';
 import logger from './lib/logger';
 const start = async () => {
   try {
     startGroupWorker();
     await scheduleAllGroupJobs();
-    await scheduleInactivityCheckJob();
+    await cancelInactivityCheckJob();
     const port = env.PORT;
     const host = env.HOST;
     await app.listen({ port, host });

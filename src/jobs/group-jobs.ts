@@ -47,6 +47,12 @@ export const scheduleInactivityCheckJob = async (): Promise<void> => {
   );
   logger.info('inactivity_check_job_scheduled');
 };
+
+export const cancelInactivityCheckJob = async (): Promise<void> => {
+  await groupJobsQueue.removeJobScheduler('check-inactivity');
+  logger.info('inactivity_check_job_cancelled');
+};
+
 export const cancelGroupJobs = async (groupId: number): Promise<void> => {
   await groupJobsQueue.removeJobScheduler(toJobId('open', groupId.toString()));
   await groupJobsQueue.removeJobScheduler(toJobId('close', groupId.toString()));
