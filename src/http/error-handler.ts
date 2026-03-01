@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AppError } from '@/lib/errors';
 import { ZodError, z } from 'zod';
+import { env } from '../config/env';
 
 export const setupErrorHandler = (app: FastifyInstance) => {
   app.setErrorHandler(async (error: Error, request: FastifyRequest, reply: FastifyReply) => {
@@ -18,7 +19,7 @@ export const setupErrorHandler = (app: FastifyInstance) => {
         error: {
           code: 'VALIDATION_ERROR',
           message: 'Invalid payload',
-          context: process.env.NODE_ENV === 'development' ? z.treeifyError(error) : undefined,
+          context: env.NODE_ENV === 'development' ? z.treeifyError(error) : undefined,
         },
       });
     }
@@ -37,7 +38,7 @@ export const setupErrorHandler = (app: FastifyInstance) => {
         error: {
           code: error.code,
           message: error.message,
-          context: process.env.NODE_ENV === 'development' ? error.context : undefined,
+          context: env.NODE_ENV === 'development' ? error.context : undefined,
         },
       });
     }

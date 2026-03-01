@@ -5,8 +5,8 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider      = "prisma-client"
+  output        = "../generated/prisma"
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
@@ -18,8 +18,8 @@ datasource db {
 
 model Member {
   memberId       Int          @id @default(autoincrement()) @map("id")
-  whatsappId     String       @map("whatsapp_id") @unique
-  whatsappLid  String?  @map("whatsapp_lid") @unique
+  whatsappId     String       @unique @map("whatsapp_id")
+  whatsappLid    String?      @unique @map("whatsapp_lid")
   whatsappNumber String       @map("whatsapp_number")
   name           String?
   memberships    Membership[]
@@ -40,6 +40,7 @@ model Membership {
   dtLastMessage DateTime? @map("dt_last_message")
   messageCount  Int       @default(0) @map("message_count")
 
+  //TODO: add a  status enum (active, left, banned, bannedbybot etc) and deprecate isActive, using it we can measure how many people the bot has banned
   member   Member    @relation(fields: [memberId], references: [memberId])
   group    Group     @relation(fields: [groupId], references: [groupId])
   warnings Warning[]
@@ -48,6 +49,7 @@ model Membership {
   @@map("memberships")
   @@schema("public")
 }
+
 model Warning {
   warningId    Int      @id @default(autoincrement()) @map("id")
   membershipId Int      @map("membership_id")
@@ -62,16 +64,30 @@ model Warning {
 }
 
 model Group {
-  groupId     Int      @id @default(autoincrement()) @map("id")
-  whatsappId  String   @unique @map("whatsapp_id")
+  groupId     Int     @id @default(autoincrement()) @map("id")
+  whatsappId  String  @unique @map("whatsapp_id")
   name        String
   description String?
-  isClosed    Boolean  @default(false) @map("is_closed")
-  openTime    String   @map("open_time") // "10:00"
-  closeTime   String   @map("close_time") // "01:00"
 
-  memberships Membership[]
+  memberships  Membership[]
+  groupConfigs GroupConfig[]
 
   @@map("groups")
+  @@schema("public")
+}
+
+model GroupConfig {
+  configId    Int      @id @default(autoincrement()) @map("id")
+  groupId     Int?     @map("group_id") // null = default
+  key         String
+  value       String   @db.Text
+  description String?
+  language    String   @default("pt-br")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  group Group? @relation(fields: [groupId], references: [groupId])
+
+  @@unique([groupId, key, language])
+  @@map("group_config")
   @@schema("public")
 }

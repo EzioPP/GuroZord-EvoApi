@@ -1,14 +1,18 @@
+import 'module-alias/register';
+// ✅ Validate environment variables first
+import { env } from './config/env';
+
 import app from './http/app';
-import { scheduleAllGroupJobs } from './jobs/group-jobs';
+import { scheduleAllGroupJobs, scheduleInactivityCheckJob } from './jobs/group-jobs';
 import { startGroupWorker } from './jobs/group-worker';
 import logger from './lib/logger';
-import 'module-alias/register';
 const start = async () => {
   try {
     startGroupWorker();
     await scheduleAllGroupJobs();
-    const port = Number(process.env.PORT ?? 3001);
-    const host = process.env.HOST ?? '0.0.0.0';
+    await scheduleInactivityCheckJob();
+    const port = env.PORT;
+    const host = env.HOST;
     await app.listen({ port, host });
     logger.info('server_listening', { port, host });
   } catch (error) {

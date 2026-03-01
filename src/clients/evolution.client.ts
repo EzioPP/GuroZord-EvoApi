@@ -2,15 +2,16 @@ import logger from '@/lib/logger';
 import { WhatsappClient } from './whatsapp.client';
 import { generateDelay } from '@/lib/delay';
 import { randomVariation } from '@/lib/message-variation';
+import { env } from '../config/env';
 export class EvolutionClient implements WhatsappClient {
   private readonly baseUrl: string;
   private readonly instance: string;
   private readonly apiKey: string;
 
   constructor(
-    baseUrl: string = process.env.EVOLUTION_API_URL ?? 'http://localhost:8081',
-    instance: string = process.env.EVOLUTION_INSTANCE ?? 'gurozord',
-    apiKey: string = process.env.AUTHENTICATION_API_KEY!,
+    baseUrl: string = env.EVOLUTION_API_URL,
+    instance: string = env.EVOLUTION_INSTANCE,
+    apiKey: string = env.AUTHENTICATION_API_KEY,
   ) {
     this.baseUrl = baseUrl;
     this.instance = instance;
@@ -74,39 +75,40 @@ export class EvolutionClient implements WhatsappClient {
     }
   }
 
-async findGroupParticipants(
-  groupJid: string,
-): Promise<{ whatsappId: string; lid?: string; role: 'admin' | 'superadmin' | null }[]> {
-  logger.info('Fetching group participants from Evolution API', { groupJid });
+  async findGroupParticipants(
+    groupJid: string,
+  ): Promise<{ whatsappId: string; lid?: string; role: 'admin' | 'superadmin' | null }[]> {
+    logger.info('Fetching group participants from Evolution API', { groupJid });
 
-  const response = await fetch(
-    `${this.baseUrl}/group/participants/${this.instance}?groupJid=${groupJid}`,
-    {
-      method: 'GET',
-      headers: { apikey: this.apiKey },
-    },
-  );
+    const response = await fetch(
+      `${this.baseUrl}/group/participants/${this.instance}?groupJid=${groupJid}`,
+      {
+        method: 'GET',
+        headers: { apikey: this.apiKey },
+      },
+    );
 
-  const responseText = await response.text();
-  logger.info('Evolution API findGroupParticipants response', {
-    status: response.status,
-    body: responseText,
-  });
+    const responseText = await response.text();
+    logger.info('Evolution API findGroupParticipants response', {
+      status: response.status,
+      body: responseText,
+    });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch participants: ${response.status} - ${responseText}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch participants: ${response.status} - ${responseText}`);
+    }
+
+    const data = JSON.parse(responseText);
+    logger.info('Parsed group participants', {data});
+    return data.participants.map((p: any) => {
+      const hasPhone = !!p.phoneNumber;
+      return {
+        whatsappId: p.phoneNumber ?? p.id,
+        lid: hasPhone && p.id?.endsWith('@lid') ? p.id : undefined,
+        role: p.admin ?? null,
+      };
+    });
   }
-
-  const data = JSON.parse(responseText);
-  return data.participants.map((p: any) => {
-    const hasPhone = !!p.phoneNumber;
-    return {
-      whatsappId: p.phoneNumber ?? p.id,
-      lid: hasPhone && p.id?.endsWith('@lid') ? p.id : undefined,
-      role: p.admin ?? null,
-    };
-  });
-}
 
   async openGroup(groupId: string): Promise<void> {
     logger.info('Opening group via Evolution API', { groupId });
@@ -198,5 +200,41 @@ async findGroupParticipants(
       whatsappId: contact.id,
       name: contact.name,
     };
+  }
+
+  async banFromGroupReal(groupWhatsappId: string, memberWhatsappNumbers: string[]): Promise<void> {
+    logger.info('Banning member from group via Evolution API', {
+      groupWhatsappId,
+      memberWhatsappNumbers,
+    });
+
+    const response = await fetch(
+      `${this.baseUrl}/group/updateParticipant/${this.instance}?groupJid=${groupWhatsappId}`,
+      {
+        method: 'POST',
+        headers: {
+          apikey: this.apiKey,
+        },
+        body: JSON.stringify({
+          participant: memberWhatsappNumbers,
+          action: 'remove',
+        }),
+      },
+    );
+
+    const responseText = await response.text();
+    logger.info('Evolution API banFromGroup response', {
+      status: response.status,
+      body: responseText,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to ban member: ${response.status} - ${responseText}`);
+    }
+  }
+
+  async banFromGroup(groupWhatsappId: string, memberWhatsappNumbers: string[]): Promise<void> {
+    logger.info('Banning member from group', { groupWhatsappId, memberWhatsappNumbers });
+    return;
   }
 }

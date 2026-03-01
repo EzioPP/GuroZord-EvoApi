@@ -2,16 +2,11 @@
 import { GroupParticipantsUpdateData } from '@/types/evolution.types';
 import logger from '@/lib/logger';
 import { Services } from '@/factory';
-import { Messages } from '@/lib/messages';
 
 const pendingWelcomes = new Map<string, { phones: string[]; timer: ReturnType<typeof setTimeout> }>();
 
 const BATCH_DELAY_MS = 5_000;
 const MAX_BATCH_SIZE = 10;    //TODO: make this better
-
-function buildWelcomeMessage(phones: string[]): string {
-  return phones.length === 1 ? Messages.welcome.single() : Messages.welcome.batch(phones);
-}
 
 async function flushWelcomes(groupId: string): Promise<void> {
   const entry = pendingWelcomes.get(groupId);
@@ -23,7 +18,8 @@ async function flushWelcomes(groupId: string): Promise<void> {
   logger.info('Sending batched welcome message', { groupId, count: phones.length });
 
   try {
-    await Services.messageService.sendMessage(groupId, buildWelcomeMessage(phones));
+    const welcomeMsg = await Services.messageTemplateService.buildWelcomeMessage(groupId, phones);
+    await Services.messageService.sendMessage(groupId, welcomeMsg);
   } catch (err) {
     logger.error('Failed to send batched welcome message', { groupId, err });
   }

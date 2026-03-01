@@ -72,7 +72,10 @@ export class GroupRepository {
       });
       return membership?.group ?? null;
     } catch (error) {
-      throw ErrorHandler.handle(error, logger, { operation: 'getOwnedGroupByMemberWhatsappId', whatsappId });
+      throw ErrorHandler.handle(error, logger, {
+        operation: 'getOwnedGroupByMemberWhatsappId',
+        whatsappId,
+      });
     }
   }
 
@@ -90,7 +93,11 @@ export class GroupRepository {
       });
       return membership?.group ?? null;
     } catch (error) {
-      throw ErrorHandler.handle(error, logger, { operation: 'getOwnedGroupByMemberAndGroupName', whatsappId, groupName });
+      throw ErrorHandler.handle(error, logger, {
+        operation: 'getOwnedGroupByMemberAndGroupName',
+        whatsappId,
+        groupName,
+      });
     }
   }
 
@@ -105,7 +112,11 @@ export class GroupRepository {
         },
       });
     } catch (error) {
-      throw ErrorHandler.handle(error, logger, { operation: 'getMembershipByWhatsappIdAndGroup', whatsappId, groupId });
+      throw ErrorHandler.handle(error, logger, {
+        operation: 'getMembershipByWhatsappIdAndGroup',
+        whatsappId,
+        groupId,
+      });
     }
   }
 
@@ -117,7 +128,10 @@ export class GroupRepository {
         },
       });
     } catch (error) {
-      throw ErrorHandler.handle(error, logger, { operation: 'findMemberByWhatsappIdOrLid', whatsappId });
+      throw ErrorHandler.handle(error, logger, {
+        operation: 'findMemberByWhatsappIdOrLid',
+        whatsappId,
+      });
     }
   }
 
@@ -169,14 +183,16 @@ export class GroupRepository {
     }
   }
 
-  async createWithDefaultSettings(name: string, whatsappId: string) {
+  async upsertGroup(name: string, whatsappId: string) {
     try {
-      logger.debug('Repository: Creating default group settings', { name });
-      return await this.prisma.group.create({
-        data: { name, whatsappId, openTime: '09:00', closeTime: '17:00' },
+      logger.debug('Repository: Upserting group', { name, whatsappId });
+      return await this.prisma.group.upsert({
+        where: { whatsappId },
+        update: { name },
+        create: { name, whatsappId },
       });
     } catch (error) {
-      throw ErrorHandler.handle(error, logger, { operation: 'createWithDefaultSettings', name, whatsappId });
+      throw ErrorHandler.handle(error, logger, { operation: 'upsertGroup', name, whatsappId });
     }
   }
 
@@ -186,6 +202,15 @@ export class GroupRepository {
       return await this.prisma.group.findMany();
     } catch (error) {
       throw ErrorHandler.handle(error, logger, { operation: 'getAllGroups' });
+    }
+  }
+
+  async getAllGroupsWithConfigs() {
+    try {
+      logger.debug('Repository: Fetching all groups with configs');
+      return await this.prisma.group.findMany({ include: { groupConfigs: true } });
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, { operation: 'getAllGroupsWithConfigs' });
     }
   }
 
@@ -210,7 +235,11 @@ export class GroupRepository {
         data: { isActive: false, dtLeft: new Date() },
       });
     } catch (error) {
-      throw ErrorHandler.handle(error, logger, { operation: 'deleteMembership', whatsappId, groupWhatsappId });
+      throw ErrorHandler.handle(error, logger, {
+        operation: 'deleteMembership',
+        whatsappId,
+        groupWhatsappId,
+      });
     }
   }
 
@@ -218,17 +247,19 @@ export class GroupRepository {
     try {
       const member = await this.findMemberByWhatsappIdOrLid(whatsappId);
       const group = await this.prisma.group.findUnique({ where: { whatsappId: groupWhatsappId } });
-      logger.debug('Incrementing message count', { whatsappId, groupWhatsappId, memberId: member?.memberId });
       if (!member || !group) return null;
       return await this.prisma.membership.updateMany({
         where: { memberId: member.memberId, groupId: group.groupId, isActive: true },
         data: { messageCount: { increment: 1 }, dtLastMessage: new Date() },
       });
     } catch (error) {
-      throw ErrorHandler.handle(error, logger, { operation: 'incrementMessageCount', whatsappId, groupWhatsappId });
+      throw ErrorHandler.handle(error, logger, {
+        operation: 'incrementMessageCount',
+        whatsappId,
+        groupWhatsappId,
+      });
     }
   }
-
 
   async getTopActiveMembers(groupWhatsappId: string, limit: number) {
     try {
@@ -241,7 +272,34 @@ export class GroupRepository {
         include: { member: true },
       });
     } catch (error) {
-      throw ErrorHandler.handle(error, logger, { operation: 'getTopActiveMembers', groupWhatsappId, limit });
+      throw ErrorHandler.handle(error, logger, {
+        operation: 'getTopActiveMembers',
+        groupWhatsappId,
+        limit,
+      });
+    }
+  }
+
+  async getInactiveMembers(groupId: number, inactiveDays: number) {
+    try {
+      logger.debug('Repository: Fetching inactive members', { groupId, inactiveDays });
+      const cutoffDate = new Date(Date.now() - inactiveDays * 24 * 60 * 60 * 1000);
+      return await this.prisma.membership.findMany({
+        where: {
+          groupId,
+          isActive: true,
+          OR: [
+            { dtLastMessage: { lt: cutoffDate } },
+            {
+              dtLastMessage: null,
+              dtJoined: { lt: cutoffDate }, // If never sent a message, check if they are new
+            },
+          ],
+        },
+        include: { member: true },
+      });
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, { operation: 'getInactiveMembers', groupId });
     }
   }
 }
