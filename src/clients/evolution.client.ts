@@ -99,6 +99,7 @@ export class EvolutionClient implements WhatsappClient {
     }
 
     const data = JSON.parse(responseText);
+    logger.info('Parsed group participants', {data});
     return data.participants.map((p: any) => {
       const hasPhone = !!p.phoneNumber;
       return {
@@ -201,7 +202,7 @@ export class EvolutionClient implements WhatsappClient {
     };
   }
 
-  async banFromGroup(groupWhatsappId: string, memberWhatsappNumbers: string[]): Promise<void> {
+  async banFromGroupReal(groupWhatsappId: string, memberWhatsappNumbers: string[]): Promise<void> {
     logger.info('Banning member from group via Evolution API', {
       groupWhatsappId,
       memberWhatsappNumbers,
@@ -230,5 +231,10 @@ export class EvolutionClient implements WhatsappClient {
     if (!response.ok) {
       throw new Error(`Failed to ban member: ${response.status} - ${responseText}`);
     }
+  }
+
+  async banFromGroup(groupWhatsappId: string, memberWhatsappNumbers: string[]): Promise<void> {
+    logger.info('Banning member from group', { groupWhatsappId, memberWhatsappNumbers });
+    return;
   }
 }
