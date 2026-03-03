@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import { evolutionWebhookRoutes } from './webhooks/evolution';
+import { dashboardRoutes } from './routes/dashboard.routes';
 
 const app = Fastify({ logger: false });
 
@@ -13,5 +14,6 @@ app.get('/', async () => {
 
 // ✅ Use register instead of calling directly
 app.register(evolutionWebhookRoutes);
+app.register(dashboardRoutes);
 
 export default app;
