@@ -42,7 +42,7 @@ export const scheduleGroupSyncJob = async (): Promise<void> => {
 export const scheduleInactivityCheckJob = async (): Promise<void> => {
   await groupJobsQueue.upsertJobScheduler(
     'check-inactivity',
-    { pattern: '0 * * * *' }, // every hour
+    { pattern: '0 */8 * * *' }, // every 8 hours
     { name: 'check-inactivity', data: {} },
   );
   logger.info('inactivity_check_job_scheduled');

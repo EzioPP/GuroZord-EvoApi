@@ -3,6 +3,7 @@ import logger from '@/lib/logger';
 import { ErrorHandler } from '@/lib/error-handler';
 import { NotFoundError } from '@/lib/errors';
 import type { GroupUpdateInput } from '@/types/repository.types';
+import { getPeriodStart } from '@/lib/period-utils';
 
 export class GroupRepository {
   constructor(private prisma: PrismaClient) {}
@@ -248,15 +249,111 @@ export class GroupRepository {
       const member = await this.findMemberByWhatsappIdOrLid(whatsappId);
       const group = await this.prisma.group.findUnique({ where: { whatsappId: groupWhatsappId } });
       if (!member || !group) return null;
-      return await this.prisma.membership.updateMany({
+
+      const now = new Date();
+
+      // Update membership with all-time count
+      const updateResult = await this.prisma.membership.updateMany({
         where: { memberId: member.memberId, groupId: group.groupId, isActive: true },
-        data: { messageCount: { increment: 1 }, dtLastMessage: new Date() },
+        data: { messageCount: { increment: 1 }, dtLastMessage: now },
       });
+
+      // Record stats for weekly and monthly periods
+      if (updateResult.count > 0) {
+        const membership = await this.prisma.membership.findFirst({
+          where: { memberId: member.memberId, groupId: group.groupId },
+        });
+
+        if (membership) {
+          // Upsert weekly and monthly stats
+          await Promise.all([
+            this.upsertMessageStats(
+              membership.membershipId,
+              'week',
+              getPeriodStart('week', now),
+            ),
+            this.upsertMessageStats(
+              membership.membershipId,
+              'month',
+              getPeriodStart('month', now),
+            ),
+          ]);
+        }
+      }
+
+      return updateResult;
     } catch (error) {
       throw ErrorHandler.handle(error, logger, {
         operation: 'incrementMessageCount',
         whatsappId,
         groupWhatsappId,
+      });
+    }
+  }
+
+  async upsertMessageStats(
+    membershipId: number,
+    periodType: 'week' | 'month',
+    periodStart: Date,
+  ) {
+    try {
+      return await this.prisma.messageStats.upsert({
+        where: {
+          membershipId_periodType_periodStart: {
+            membershipId,
+            periodType,
+            periodStart,
+          },
+        },
+        update: { count: { increment: 1 } },
+        create: {
+          membershipId,
+          periodType,
+          periodStart,
+          count: 1,
+        },
+      });
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, {
+        operation: 'upsertMessageStats',
+        membershipId,
+        periodType,
+      });
+    }
+  }
+
+  async getTopActiveMembersByPeriod(
+    groupWhatsappId: string,
+    periodType: 'week' | 'month',
+    limit: number,
+  ) {
+    try {
+      const group = await this.prisma.group.findUnique({ where: { whatsappId: groupWhatsappId } });
+      if (!group) throw new NotFoundError('Group not found', { groupWhatsappId });
+
+      const periodStart = getPeriodStart(periodType);
+
+      const stats = await this.prisma.messageStats.findMany({
+        where: {
+          membership: { groupId: group.groupId, isActive: true },
+          periodType,
+          periodStart,
+        },
+        orderBy: { count: 'desc' },
+        take: limit,
+        include: { membership: { include: { member: true } } },
+      });
+
+      return stats.map((stat) => ({
+        whatsappNumber: stat.membership.member.whatsappNumber,
+        messageCount: stat.count,
+      }));
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, {
+        operation: 'getTopActiveMembersByPeriod',
+        groupWhatsappId,
+        periodType,
+        limit,
       });
     }
   }

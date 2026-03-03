@@ -44,8 +44,28 @@ export async function handleMessagesUpsert(data: EvolutionMessageData) {
   }
 if (msg.startsWith('/top')) {
   if (!groupWhatsappId) return;
-  const topMembers = await Services.groupService.getTopActiveMembers(groupWhatsappId, 10);
-  const topMessage = await Services.messageTemplateService.buildTopMessage(groupWhatsappId, topMembers);
+
+  // Parse period: /top, /top week, /top month, /top all
+  const parts = msg.split(/\s+/);
+  const period = parts[1]?.toLowerCase() ?? 'week'; // Default to week
+  
+  let topMembers;
+  if (period === 'all' || period === 'alltime' || period === 'all-time') {
+    topMembers = await Services.groupService.getTopActiveMembers(groupWhatsappId, 10);
+  } else if (period === 'week' || period === 'semanal') {
+    topMembers = await Services.groupService.getTopActiveMembersByPeriod(groupWhatsappId, 'week', 10);
+  } else if (period === 'month' || period === 'mensal' || period === 'mês') {
+    topMembers = await Services.groupService.getTopActiveMembersByPeriod(groupWhatsappId, 'month', 10);
+  } else {
+    // Invalid period, default to week
+    topMembers = await Services.groupService.getTopActiveMembersByPeriod(groupWhatsappId, 'week', 10);
+  }
+
+  const topMessage = await Services.messageTemplateService.buildTopMessage(
+    groupWhatsappId,
+    topMembers,
+    period === 'all' || period === 'alltime' || period === 'all-time' ? 'all-time' : (period === 'month' || period === 'mensal' || period === 'mês' ? 'month' : 'week'),
+  );
   await Services.messageService.sendMessage(replyTo, topMessage);
 }
   logger.info('Received command', { senderId, groupWhatsappId, command: msg });

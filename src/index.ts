@@ -10,7 +10,6 @@ const start = async () => {
   try {
     startGroupWorker();
     await scheduleAllGroupJobs();
-    await cancelInactivityCheckJob();
     const port = env.PORT;
     const host = env.HOST;
     await app.listen({ port, host });

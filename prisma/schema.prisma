@@ -41,9 +41,10 @@ model Membership {
   messageCount  Int       @default(0) @map("message_count")
 
   //TODO: add a  status enum (active, left, banned, bannedbybot etc) and deprecate isActive, using it we can measure how many people the bot has banned
-  member   Member    @relation(fields: [memberId], references: [memberId])
-  group    Group     @relation(fields: [groupId], references: [groupId])
-  warnings Warning[]
+  member       Member         @relation(fields: [memberId], references: [memberId])
+  group        Group          @relation(fields: [groupId], references: [groupId])
+  warnings     Warning[]
+  messageStats MessageStats[]
 
   @@unique([memberId, groupId])
   @@map("memberships")
@@ -89,5 +90,21 @@ model GroupConfig {
 
   @@unique([groupId, key, language])
   @@map("group_config")
+  @@schema("public")
+}
+
+model MessageStats {
+  statId       Int        @id @default(autoincrement()) @map("id")
+  membershipId Int        @map("membership_id")
+  periodType   String     @map("period_type") // "week" | "month" | "all_time"
+  periodStart  DateTime   @map("period_start") // Monday 00:00 for week, 1st of month for month
+  count        Int        @default(0)
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  membership Membership @relation(fields: [membershipId], references: [membershipId], onDelete: Cascade)
+
+  @@unique([membershipId, periodType, periodStart])
+  @@index([periodType, periodStart])
+  @@map("message_stats")
   @@schema("public")
 }

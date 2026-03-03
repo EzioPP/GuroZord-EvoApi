@@ -202,6 +202,27 @@ export class GroupService {
     }));
   }
 
+  async getTopActiveMembersByPeriod(
+    groupWhatsappId: string,
+    periodType: 'week' | 'month',
+    limit: number,
+  ) {
+    if (!groupWhatsappId)
+      throw new ValidationError('Group WhatsApp ID is required', { groupWhatsappId });
+    if (limit <= 0)
+      throw new ValidationError('Limit must be greater than 0', { groupWhatsappId, limit });
+    this.logger.info('Service: Fetching top active members by period', {
+      groupWhatsappId,
+      periodType,
+      limit,
+    });
+    return await this.groupRepository.getTopActiveMembersByPeriod(
+      groupWhatsappId,
+      periodType,
+      limit,
+    );
+  }
+
   async removeMembership(whatsappId: string, groupWhatsappId: string) {
     if (!whatsappId) throw new ValidationError('WhatsApp ID is required', { whatsappId });
     if (!groupWhatsappId)

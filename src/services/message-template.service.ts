@@ -17,6 +17,9 @@ export const DEFAULT_TEMPLATES: Record<string, string> = {
   msg_top_empty: 'Nenhum membro ativo ainda.',
   msg_top_header: 'TOP 10 - Membros Mais Ativos',
   msg_top_subheader: 'Ranking da Semana',
+  msg_top_subheader_week: 'Ranking da Semana',
+  msg_top_subheader_month: 'Ranking do Mês',
+  msg_top_subheader_alltime: 'Ranking Geral',
   msg_top_line: '{medal}{ordinal} – {number}{emoji} ({count} mensagens)',
   msg_top_footer: 'Continue participando para subir no ranking!',
   msg_top_medals: JSON.stringify(['🥇', '🥈', '🥉']),
@@ -61,6 +64,9 @@ export const FANCY_PRESET: Record<string, string> = {
   msg_top_empty: 'Nenhum membro ativo ainda! 😴',
   msg_top_header: '🎀✨ TOP 10 – As Mais Ativas do Grupo ✨🎀',
   msg_top_subheader: '🌸 Atualização da Semana 🌸',
+  msg_top_subheader_week: '🌸 Ranking da Semana 🌸',
+  msg_top_subheader_month: '🌸 Ranking do Mês 🌸',
+  msg_top_subheader_alltime: '🌸 Ranking Geral 🌸',
   msg_top_line: '{medal}{ordinal} – {number}{emoji} ({count} mensagens)',
   msg_top_footer: [
     '💌 Continue participando para subir no ranking!',
@@ -120,6 +126,7 @@ export class MessageTemplateService {
   async buildTopMessage(
     groupWhatsappId: string,
     members: { whatsappNumber: string; messageCount: number }[],
+    periodType: 'week' | 'month' | 'all-time' = 'week',
   ): Promise<string> {
     const groupId = await this.resolveGroupId(groupWhatsappId);
     const t = await this.loadTemplates(groupId);
@@ -144,7 +151,17 @@ export class MessageTemplateService {
         .replace('{count}', String(m.messageCount));
     });
 
-    return [t.msg_top_header, t.msg_top_subheader, '', ...lines, '', t.msg_top_footer].join('\n');
+    // Determine subheader based on period
+    let subheader = t.msg_top_subheader;
+    if (periodType === 'week') {
+      subheader = t.msg_top_subheader_week ?? 'Ranking da Semana';
+    } else if (periodType === 'month') {
+      subheader = t.msg_top_subheader_month ?? 'Ranking do Mês';
+    } else if (periodType === 'all-time') {
+      subheader = t.msg_top_subheader_alltime ?? 'Ranking Geral';
+    }
+
+    return [t.msg_top_header, subheader, '', ...lines, '', t.msg_top_footer].join('\n');
   }
 
   async buildInactivityWarningMessage(

@@ -109,8 +109,25 @@ export const checkGroupInactivity = async (): Promise<void> => {
         // Find inactive members to warn (excluding already banned members)
         const inactiveMembers = await Services.groupRepository.getInactiveMembers(group.groupId, warningDays);
 
+        // Exclude already banned members and members who already have an inactivity warning
+        const alreadyWarnedIds = new Set(
+          (
+            await prisma.warning.findMany({
+              where: {
+                reason: 'inactivity',
+                membershipId: {
+                  in: inactiveMembers.map((m) => m.membershipId),
+                },
+              },
+              select: { membershipId: true },
+            })
+          ).map((w) => w.membershipId),
+        );
+
         const membersToWarn = inactiveMembers.filter(
-          (membership) => !bannedMemberIds.has(membership.memberId),
+          (membership) =>
+            !bannedMemberIds.has(membership.memberId) &&
+            !alreadyWarnedIds.has(membership.membershipId),
         );
 
         if (membersToWarn.length === 0) continue;
@@ -143,6 +160,15 @@ export const checkGroupInactivity = async (): Promise<void> => {
             });
           });
         }
+
+        // Record inactivity warnings so we don't warn the same members again
+        await prisma.warning.createMany({
+          data: membersToWarn.map((membership) => ({
+            membershipId: membership.membershipId,
+            reason: 'inactivity',
+            appliedById: 0, // 0 = system
+          })),
+        });
       } catch (groupErr) {
         logger.error('Error processing group inactivity check', {
           groupId: group.groupId,
