@@ -7,9 +7,15 @@ import { MessageService } from '@/services/message.service';
 import { MessageTemplateService } from '@/services/message-template.service';
 import { RankingRepository, GroupRepository, GroupConfigRepository } from '@/persistence';
 import { EvolutionClient } from '@/clients/evolution.client';
+import { NoopWhatsappClient } from '@/clients/whatsapp.client';
+import { env } from '@/config/env';
 
-const evolutionClient = new EvolutionClient();
-
+const readOnlyEvolutionClient = new EvolutionClient();
+const evolutionClient =
+  env.NODE_ENV === 'development'
+    ? new NoopWhatsappClient(readOnlyEvolutionClient)
+    : readOnlyEvolutionClient;
+logger.info('Whatsapp client initialized', { client: evolutionClient.constructor.name });
 export const createRankingService = (): RankingService => {
   const rankingRepository = new RankingRepository(prisma);
   return new RankingService(rankingRepository, logger);

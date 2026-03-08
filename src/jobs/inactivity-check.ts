@@ -1,6 +1,7 @@
 import logger from '@/lib/logger';
 import prisma from '@/lib/prisma';
 import { Services } from '@/factory';
+import { formatMemberMention } from '@/lib/member-display';
 
 const ptBrDateTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
   dateStyle: 'short',
@@ -62,7 +63,11 @@ export const checkGroupInactivity = async (): Promise<void> => {
             const bannedLines = membersToBan.map((membership) => {
               const referenceDate = membership.dtLastMessage ?? membership.dtJoined;
               const referenceLabel = membership.dtLastMessage ? 'Última interação' : 'Entrou em';
-              return `@${membership.member.whatsappNumber} - ${referenceLabel}: ${ptBrDateTimeFormatter.format(referenceDate)}`;
+              const memberLabel = formatMemberMention({
+                whatsappNumber: membership.member.whatsappNumber,
+                name: membership.member.name,
+              });
+              return `${memberLabel} - ${referenceLabel}: ${ptBrDateTimeFormatter.format(referenceDate)}`;
             });
 
             const bannedSummaryMessage = [
@@ -147,7 +152,9 @@ export const checkGroupInactivity = async (): Promise<void> => {
             warningDays,
             batch.map((membership) => ({
               whatsappNumber: membership.member.whatsappNumber,
+              name: membership.member.name,
               dtLastMessage: membership.dtLastMessage,
+              dtJoined: membership.dtJoined,
             })),
           );
 

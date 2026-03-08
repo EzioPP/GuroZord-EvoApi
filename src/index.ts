@@ -1,18 +1,19 @@
-import 'module-alias/register';
-// ✅ Validate environment variables first
+// Validate environment variables first
 import { env } from './config/env';
 
 import app from './http/app';
-import { scheduleAllGroupJobs, cancelInactivityCheckJob } from './jobs/group-jobs';
+import { scheduleAllGroupJobs, scheduleInactivityCheckJob } from './jobs/group-jobs';
 import { startGroupWorker } from './jobs/group-worker';
 import logger from './lib/logger';
 const start = async () => {
   try {
     startGroupWorker();
     await scheduleAllGroupJobs();
+    await scheduleInactivityCheckJob();
     const port = env.PORT;
     const host = env.HOST;
     await app.listen({ port, host });
+    logger.info('Eviroment variables validated successfully', { env: env.NODE_ENV });
     logger.info('server_listening', { port, host });
   } catch (error) {
     logger.error('server_start_failed', { error });

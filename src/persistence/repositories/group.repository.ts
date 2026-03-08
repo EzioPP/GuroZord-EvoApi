@@ -2,8 +2,18 @@ import { PrismaClient } from '@@/generated/prisma/client';
 import logger from '@/lib/logger';
 import { ErrorHandler } from '@/lib/error-handler';
 import { NotFoundError } from '@/lib/errors';
+import { env } from '@/config/env';
 import type { GroupUpdateInput } from '@/types/repository.types';
 import { getPeriodStart } from '@/lib/period-utils';
+
+const normalizeWhatsappNumber = (value?: string): string | undefined => {
+  if (!value) return undefined;
+  const numberPart = value.split('@')[0];
+  const digits = numberPart.replace(/\D/g, '');
+  return digits || undefined;
+};
+
+const botWhatsappNumber = normalizeWhatsappNumber(env.BOT_WHATSAPP_NUMBER);
 
 export class GroupRepository {
   constructor(private prisma: PrismaClient) {}
@@ -136,21 +146,61 @@ export class GroupRepository {
     }
   }
 
-  async upsertMember(data: { whatsappId: string; whatsappNumber: string; whatsappLid?: string }) {
+  async upsertMember(data: {
+    whatsappId: string;
+    whatsappNumber: string;
+    whatsappLid?: string;
+    name?: string;
+  }) {
     try {
       return await this.prisma.member.upsert({
         where: { whatsappId: data.whatsappId },
         update: {
           ...(data.whatsappLid && { whatsappLid: data.whatsappLid }),
+          ...(data.name && { name: data.name }),
         },
         create: {
           whatsappId: data.whatsappId,
           whatsappNumber: data.whatsappNumber,
           whatsappLid: data.whatsappLid,
+          name: data.name,
         },
       });
     } catch (error) {
       throw ErrorHandler.handle(error, logger, { operation: 'upsertMember', ...data });
+    }
+  }
+
+  async updateMemberNameIfChanged(whatsappId: string, name: string) {
+    try {
+      const normalizedName = name.trim();
+      if (!normalizedName) {
+        return null;
+      }
+
+      const member = await this.prisma.member.findFirst({
+        where: {
+          OR: [{ whatsappId }, { whatsappLid: whatsappId }],
+        },
+        select: {
+          memberId: true,
+          name: true,
+        },
+      });
+
+      if (!member || member.name === normalizedName) {
+        return member;
+      }
+
+      return await this.prisma.member.update({
+        where: { memberId: member.memberId },
+        data: { name: normalizedName },
+      });
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, {
+        operation: 'updateMemberNameIfChanged',
+        whatsappId,
+      });
     }
   }
 
@@ -335,7 +385,19 @@ export class GroupRepository {
 
       const stats = await this.prisma.messageStats.findMany({
         where: {
-          membership: { groupId: group.groupId, isActive: true },
+          membership: {
+            groupId: group.groupId,
+            isActive: true,
+            ...(botWhatsappNumber
+              ? {
+                  member: {
+                    whatsappNumber: {
+                      not: botWhatsappNumber,
+                    },
+                  },
+                }
+              : {}),
+          },
           periodType,
           periodStart,
         },
@@ -346,6 +408,7 @@ export class GroupRepository {
 
       return stats.map((stat) => ({
         whatsappNumber: stat.membership.member.whatsappNumber,
+        name: stat.membership.member.name,
         messageCount: stat.count,
       }));
     } catch (error) {
@@ -363,7 +426,19 @@ export class GroupRepository {
       const group = await this.prisma.group.findUnique({ where: { whatsappId: groupWhatsappId } });
       if (!group) throw new NotFoundError('Group not found', { groupWhatsappId });
       return await this.prisma.membership.findMany({
-        where: { groupId: group.groupId, isActive: true },
+        where: {
+          groupId: group.groupId,
+          isActive: true,
+          ...(botWhatsappNumber
+            ? {
+                member: {
+                  whatsappNumber: {
+                    not: botWhatsappNumber,
+                  },
+                },
+              }
+            : {}),
+        },
         orderBy: { messageCount: 'desc' },
         take: limit,
         include: { member: true },
@@ -385,6 +460,15 @@ export class GroupRepository {
         where: {
           groupId,
           isActive: true,
+          ...(botWhatsappNumber
+            ? {
+                member: {
+                  whatsappNumber: {
+                    not: botWhatsappNumber,
+                  },
+                },
+              }
+            : {}),
           OR: [
             { dtLastMessage: { lt: cutoffDate } },
             {

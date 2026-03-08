@@ -1,5 +1,12 @@
 import { Logger } from 'winston';
 import { GroupRepository, GroupConfigRepository } from '@/persistence';
+import { formatMemberMention, resolveMemberDisplayValue } from '@/lib/member-display';
+
+const ptBrDateTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+  timeZone: 'America/Sao_Paulo',
+});
 
 export const DEFAULT_TEMPLATES: Record<string, string> = {
   msg_welcome_rules: [
@@ -110,22 +117,32 @@ export class MessageTemplateService {
     return group.groupId;
   }
 
-  async buildWelcomeMessage(groupWhatsappId: string, phones: string[]): Promise<string> {
+  async buildWelcomeMessage(
+    groupWhatsappId: string,
+    members: { whatsappNumber: string; name?: string | null }[],
+  ): Promise<string> {
     const groupId = await this.resolveGroupId(groupWhatsappId);
     const t = await this.loadTemplates(groupId);
     const rules = t.msg_welcome_rules;
 
-    if (phones.length === 1) {
+    if (members.length === 1) {
       return t.msg_welcome_single.replace('{rules}', rules);
     }
 
-    const mentions = phones.map((p) => `@${p}`).join(', ');
+    const mentions = members
+      .map((member) =>
+        formatMemberMention({
+          whatsappNumber: member.whatsappNumber,
+          name: member.name,
+        }),
+      )
+      .join(', ');
     return t.msg_welcome_batch.replace('{mentions}', mentions).replace('{rules}', rules);
   }
 
   async buildTopMessage(
     groupWhatsappId: string,
-    members: { whatsappNumber: string; messageCount: number }[],
+    members: { whatsappNumber: string; name?: string | null; messageCount: number }[],
     periodType: 'week' | 'month' | 'all-time' = 'week',
   ): Promise<string> {
     const groupId = await this.resolveGroupId(groupWhatsappId);
@@ -143,10 +160,14 @@ export class MessageTemplateService {
       const medal = i < medals.length ? `${medals[i]} ` : '';
       const emoji = emojis[i] ? ` ${emojis[i]}` : '';
       const ordinal = ordinals[i] ?? `${i + 1}º`;
+      const memberDisplay = resolveMemberDisplayValue(m);
+      const memberLabel = t.msg_top_line.includes('@{number}')
+        ? memberDisplay
+        : formatMemberMention(m);
       return t.msg_top_line
         .replace('{medal}', medal)
         .replace('{ordinal}', ordinal)
-        .replace('{number}', m.whatsappNumber)
+        .replace('{number}', memberLabel)
         .replace('{emoji}', emoji)
         .replace('{count}', String(m.messageCount));
     });
@@ -167,15 +188,28 @@ export class MessageTemplateService {
   async buildInactivityWarningMessage(
     groupWhatsappId: string,
     warningDays: number,
-    members: { whatsappNumber: string; dtLastMessage: Date | null }[],
+    members: {
+      whatsappNumber: string;
+      name?: string | null;
+      dtLastMessage: Date | null;
+      dtJoined?: Date | null;
+    }[],
   ): Promise<string> {
     const groupId = await this.resolveGroupId(groupWhatsappId);
     const t = await this.loadTemplates(groupId);
 
     const lines = members.map((member) => {
-      const lastMessage = member.dtLastMessage?.toISOString() ?? t.msg_inactive_warning_never;
+      const lastMessage = member.dtLastMessage
+        ? ptBrDateTimeFormatter.format(member.dtLastMessage)
+        : member.dtJoined
+          ? `${t.msg_inactive_warning_never} (entrou em ${ptBrDateTimeFormatter.format(member.dtJoined)})`
+          : t.msg_inactive_warning_never;
+      const memberDisplay = resolveMemberDisplayValue(member);
+      const memberLabel = t.msg_inactive_warning_line.includes('@{number}')
+        ? memberDisplay
+        : formatMemberMention(member);
       return t.msg_inactive_warning_line
-        .replace('{number}', member.whatsappNumber)
+        .replace('{number}', memberLabel)
         .replace('{lastMessage}', lastMessage);
     });
 
