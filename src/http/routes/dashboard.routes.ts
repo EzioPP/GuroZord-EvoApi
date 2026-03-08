@@ -163,7 +163,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
   app.get('/dashboard/health', async (request: FastifyRequest, reply: FastifyReply) => {
     return reply.send({
       success: true,
-      status: 'guzroord running',
+      status: 'gurozord running',
     });
   });
 }
