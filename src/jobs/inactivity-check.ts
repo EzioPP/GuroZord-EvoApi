@@ -1,6 +1,7 @@
 import logger from '@/lib/logger';
 import prisma from '@/lib/prisma';
 import { Services } from '@/factory';
+import { formatMemberMention } from '@/lib/member-display';
 
 const ptBrDateTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
   dateStyle: 'short',
@@ -62,7 +63,11 @@ export const checkGroupInactivity = async (): Promise<void> => {
             const bannedLines = membersToBan.map((membership) => {
               const referenceDate = membership.dtLastMessage ?? membership.dtJoined;
               const referenceLabel = membership.dtLastMessage ? 'Última interação' : 'Entrou em';
-              return `@${membership.member.whatsappNumber} - ${referenceLabel}: ${ptBrDateTimeFormatter.format(referenceDate)}`;
+              const memberLabel = formatMemberMention({
+                whatsappNumber: membership.member.whatsappNumber,
+                name: membership.member.name,
+              });
+              return `${memberLabel} - ${referenceLabel}: ${ptBrDateTimeFormatter.format(referenceDate)}`;
             });
 
             const bannedSummaryMessage = [
@@ -109,8 +114,25 @@ export const checkGroupInactivity = async (): Promise<void> => {
         // Find inactive members to warn (excluding already banned members)
         const inactiveMembers = await Services.groupRepository.getInactiveMembers(group.groupId, warningDays);
 
+        // Exclude already banned members and members who already have an inactivity warning
+        const alreadyWarnedIds = new Set(
+          (
+            await prisma.warning.findMany({
+              where: {
+                reason: 'inactivity',
+                membershipId: {
+                  in: inactiveMembers.map((m) => m.membershipId),
+                },
+              },
+              select: { membershipId: true },
+            })
+          ).map((w) => w.membershipId),
+        );
+
         const membersToWarn = inactiveMembers.filter(
-          (membership) => !bannedMemberIds.has(membership.memberId),
+          (membership) =>
+            !bannedMemberIds.has(membership.memberId) &&
+            !alreadyWarnedIds.has(membership.membershipId),
         );
 
         if (membersToWarn.length === 0) continue;
@@ -130,7 +152,9 @@ export const checkGroupInactivity = async (): Promise<void> => {
             warningDays,
             batch.map((membership) => ({
               whatsappNumber: membership.member.whatsappNumber,
+              name: membership.member.name,
               dtLastMessage: membership.dtLastMessage,
+              dtJoined: membership.dtJoined,
             })),
           );
 
@@ -143,6 +167,15 @@ export const checkGroupInactivity = async (): Promise<void> => {
             });
           });
         }
+
+        // Record inactivity warnings so we don't warn the same members again
+        await prisma.warning.createMany({
+          data: membersToWarn.map((membership) => ({
+            membershipId: membership.membershipId,
+            reason: 'inactivity',
+            appliedById: 0, // 0 = system
+          })),
+        });
       } catch (groupErr) {
         logger.error('Error processing group inactivity check', {
           groupId: group.groupId,

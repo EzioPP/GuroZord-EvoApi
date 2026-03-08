@@ -3,42 +3,50 @@ import { GroupParticipantsUpdateData } from '@/types/evolution.types';
 import logger from '@/lib/logger';
 import { Services } from '@/factory';
 
-const pendingWelcomes = new Map<string, { phones: string[]; timer: ReturnType<typeof setTimeout> }>();
+type PendingWelcomeMember = {
+  whatsappNumber: string;
+  name?: string | null;
+};
+
+const pendingWelcomes = new Map<
+  string,
+  { members: PendingWelcomeMember[]; timer: ReturnType<typeof setTimeout> }
+>();
 
 const BATCH_DELAY_MS = 5_000;
 const MAX_BATCH_SIZE = 10;    //TODO: make this better
 
 async function flushWelcomes(groupId: string): Promise<void> {
   const entry = pendingWelcomes.get(groupId);
-  if (!entry || entry.phones.length === 0) return;
+  if (!entry || entry.members.length === 0) return;
 
-  const phones = [...entry.phones];
+  const members = [...entry.members];
   pendingWelcomes.delete(groupId);
 
-  logger.info('Sending batched welcome message', { groupId, count: phones.length });
+  logger.info('Sending batched welcome message', { groupId, count: members.length });
 
   try {
-    const welcomeMsg = await Services.messageTemplateService.buildWelcomeMessage(groupId, phones);
+    const welcomeMsg = await Services.messageTemplateService.buildWelcomeMessage(groupId, members);
     await Services.messageService.sendMessage(groupId, welcomeMsg);
   } catch (err) {
     logger.error('Failed to send batched welcome message', { groupId, err });
   }
 }
 
-function scheduleWelcome(groupId: string, phoneNumber: string): void {
+function scheduleWelcome(groupId: string, member: PendingWelcomeMember): void {
   let entry = pendingWelcomes.get(groupId);
 
   if (entry) {
     clearTimeout(entry.timer);
-    entry.phones.push(phoneNumber);
+    entry.members.push(member);
   } else {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    entry = { phones: [phoneNumber], timer: undefined as any };
+    entry = { members: [member], timer: undefined as any };
     pendingWelcomes.set(groupId, entry);
   }
 
   // Flush immediately if we hit the max batch size
-  if (entry.phones.length >= MAX_BATCH_SIZE) {
+  if (entry.members.length >= MAX_BATCH_SIZE) {
     clearTimeout(entry.timer);
     void flushWelcomes(groupId);
     return;
@@ -59,7 +67,11 @@ export async function handleGroupParticipantsUpdate(data: GroupParticipantsUpdat
       logger.info('New participant joined group', { groupId, phoneNumber });
 
       await Services.groupService.addMembership(participantWhatsappId, groupId);
-      scheduleWelcome(groupId, phoneNumber);
+      const member = await Services.groupService.getUserByWhatsappId(participantWhatsappId).catch(() => null);
+      scheduleWelcome(groupId, {
+        whatsappNumber: phoneNumber,
+        name: member?.name ?? null,
+      });
     }
 
     if (data.action === 'remove') {

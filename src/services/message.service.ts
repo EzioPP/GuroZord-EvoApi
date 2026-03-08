@@ -12,9 +12,6 @@ export class MessageService {
     if (!senderId) {
       throw new ValidationError('Sender ID is required', { senderId });
     }
-
-    this.logger.info('Service: Handling incoming message', { senderId, text });
-
     if (text === 'hello') {
       await this.whatsappClient.sendMessage(senderId, 'world');
     }

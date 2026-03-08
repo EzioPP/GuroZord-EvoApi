@@ -2,7 +2,18 @@ import { PrismaClient } from '@@/generated/prisma/client';
 import logger from '@/lib/logger';
 import { ErrorHandler } from '@/lib/error-handler';
 import { NotFoundError } from '@/lib/errors';
+import { env } from '@/config/env';
 import type { GroupUpdateInput } from '@/types/repository.types';
+import { getPeriodStart } from '@/lib/period-utils';
+
+const normalizeWhatsappNumber = (value?: string): string | undefined => {
+  if (!value) return undefined;
+  const numberPart = value.split('@')[0];
+  const digits = numberPart.replace(/\D/g, '');
+  return digits || undefined;
+};
+
+const botWhatsappNumber = normalizeWhatsappNumber(env.BOT_WHATSAPP_NUMBER);
 
 export class GroupRepository {
   constructor(private prisma: PrismaClient) {}
@@ -135,21 +146,61 @@ export class GroupRepository {
     }
   }
 
-  async upsertMember(data: { whatsappId: string; whatsappNumber: string; whatsappLid?: string }) {
+  async upsertMember(data: {
+    whatsappId: string;
+    whatsappNumber: string;
+    whatsappLid?: string;
+    name?: string;
+  }) {
     try {
       return await this.prisma.member.upsert({
         where: { whatsappId: data.whatsappId },
         update: {
           ...(data.whatsappLid && { whatsappLid: data.whatsappLid }),
+          ...(data.name && { name: data.name }),
         },
         create: {
           whatsappId: data.whatsappId,
           whatsappNumber: data.whatsappNumber,
           whatsappLid: data.whatsappLid,
+          name: data.name,
         },
       });
     } catch (error) {
       throw ErrorHandler.handle(error, logger, { operation: 'upsertMember', ...data });
+    }
+  }
+
+  async updateMemberNameIfChanged(whatsappId: string, name: string) {
+    try {
+      const normalizedName = name.trim();
+      if (!normalizedName) {
+        return null;
+      }
+
+      const member = await this.prisma.member.findFirst({
+        where: {
+          OR: [{ whatsappId }, { whatsappLid: whatsappId }],
+        },
+        select: {
+          memberId: true,
+          name: true,
+        },
+      });
+
+      if (!member || member.name === normalizedName) {
+        return member;
+      }
+
+      return await this.prisma.member.update({
+        where: { memberId: member.memberId },
+        data: { name: normalizedName },
+      });
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, {
+        operation: 'updateMemberNameIfChanged',
+        whatsappId,
+      });
     }
   }
 
@@ -248,10 +299,39 @@ export class GroupRepository {
       const member = await this.findMemberByWhatsappIdOrLid(whatsappId);
       const group = await this.prisma.group.findUnique({ where: { whatsappId: groupWhatsappId } });
       if (!member || !group) return null;
-      return await this.prisma.membership.updateMany({
+
+      const now = new Date();
+
+      // Update membership with all-time count
+      const updateResult = await this.prisma.membership.updateMany({
         where: { memberId: member.memberId, groupId: group.groupId, isActive: true },
-        data: { messageCount: { increment: 1 }, dtLastMessage: new Date() },
+        data: { messageCount: { increment: 1 }, dtLastMessage: now },
       });
+
+      // Record stats for weekly and monthly periods
+      if (updateResult.count > 0) {
+        const membership = await this.prisma.membership.findFirst({
+          where: { memberId: member.memberId, groupId: group.groupId },
+        });
+
+        if (membership) {
+          // Upsert weekly and monthly stats
+          await Promise.all([
+            this.upsertMessageStats(
+              membership.membershipId,
+              'week',
+              getPeriodStart('week', now),
+            ),
+            this.upsertMessageStats(
+              membership.membershipId,
+              'month',
+              getPeriodStart('month', now),
+            ),
+          ]);
+        }
+      }
+
+      return updateResult;
     } catch (error) {
       throw ErrorHandler.handle(error, logger, {
         operation: 'incrementMessageCount',
@@ -261,12 +341,104 @@ export class GroupRepository {
     }
   }
 
+  async upsertMessageStats(
+    membershipId: number,
+    periodType: 'week' | 'month',
+    periodStart: Date,
+  ) {
+    try {
+      return await this.prisma.messageStats.upsert({
+        where: {
+          membershipId_periodType_periodStart: {
+            membershipId,
+            periodType,
+            periodStart,
+          },
+        },
+        update: { count: { increment: 1 } },
+        create: {
+          membershipId,
+          periodType,
+          periodStart,
+          count: 1,
+        },
+      });
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, {
+        operation: 'upsertMessageStats',
+        membershipId,
+        periodType,
+      });
+    }
+  }
+
+  async getTopActiveMembersByPeriod(
+    groupWhatsappId: string,
+    periodType: 'week' | 'month',
+    limit: number,
+  ) {
+    try {
+      const group = await this.prisma.group.findUnique({ where: { whatsappId: groupWhatsappId } });
+      if (!group) throw new NotFoundError('Group not found', { groupWhatsappId });
+
+      const periodStart = getPeriodStart(periodType);
+
+      const stats = await this.prisma.messageStats.findMany({
+        where: {
+          membership: {
+            groupId: group.groupId,
+            isActive: true,
+            ...(botWhatsappNumber
+              ? {
+                  member: {
+                    whatsappNumber: {
+                      not: botWhatsappNumber,
+                    },
+                  },
+                }
+              : {}),
+          },
+          periodType,
+          periodStart,
+        },
+        orderBy: { count: 'desc' },
+        take: limit,
+        include: { membership: { include: { member: true } } },
+      });
+
+      return stats.map((stat) => ({
+        whatsappNumber: stat.membership.member.whatsappNumber,
+        name: stat.membership.member.name,
+        messageCount: stat.count,
+      }));
+    } catch (error) {
+      throw ErrorHandler.handle(error, logger, {
+        operation: 'getTopActiveMembersByPeriod',
+        groupWhatsappId,
+        periodType,
+        limit,
+      });
+    }
+  }
+
   async getTopActiveMembers(groupWhatsappId: string, limit: number) {
     try {
       const group = await this.prisma.group.findUnique({ where: { whatsappId: groupWhatsappId } });
       if (!group) throw new NotFoundError('Group not found', { groupWhatsappId });
       return await this.prisma.membership.findMany({
-        where: { groupId: group.groupId, isActive: true },
+        where: {
+          groupId: group.groupId,
+          isActive: true,
+          ...(botWhatsappNumber
+            ? {
+                member: {
+                  whatsappNumber: {
+                    not: botWhatsappNumber,
+                  },
+                },
+              }
+            : {}),
+        },
         orderBy: { messageCount: 'desc' },
         take: limit,
         include: { member: true },
@@ -288,6 +460,15 @@ export class GroupRepository {
         where: {
           groupId,
           isActive: true,
+          ...(botWhatsappNumber
+            ? {
+                member: {
+                  whatsappNumber: {
+                    not: botWhatsappNumber,
+                  },
+                },
+              }
+            : {}),
           OR: [
             { dtLastMessage: { lt: cutoffDate } },
             {

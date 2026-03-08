@@ -18,6 +18,9 @@ const envSchema = z.object({
   EVOLUTION_INSTANCE: z.string().min(1).default('gurozord'),
   AUTHENTICATION_API_KEY: z.string().min(1, 'AUTHENTICATION_API_KEY is required'),
 
+  // Bot identity
+  BOT_WHATSAPP_NUMBER: z.string().optional(),
+
   // Testing
   TEST_WHATSAPP_NUMBER: z.string().optional(),
 });

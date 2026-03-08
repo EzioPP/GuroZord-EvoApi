@@ -3,6 +3,20 @@ import { WhatsappClient } from './whatsapp.client';
 import { generateDelay } from '@/lib/delay';
 import { randomVariation } from '@/lib/message-variation';
 import { env } from '../config/env';
+import { WhatsappGroupParticipant } from '../types/whatsapp.types';
+
+type EvolutionGroupParticipant = {
+  id?: string;
+  phoneNumber?: string;
+  admin?: 'admin' | 'superadmin' | null;
+  name?: string | null;
+};
+
+type EvolutionGroup = {
+  id: string;
+  subject: string;
+};
+
 export class EvolutionClient implements WhatsappClient {
   private readonly baseUrl: string;
   private readonly instance: string;
@@ -77,7 +91,7 @@ export class EvolutionClient implements WhatsappClient {
 
   async findGroupParticipants(
     groupJid: string,
-  ): Promise<{ whatsappId: string; lid?: string; role: 'admin' | 'superadmin' | null }[]> {
+  ): Promise<WhatsappGroupParticipant[]> {
     logger.info('Fetching group participants from Evolution API', { groupJid });
 
     const response = await fetch(
@@ -98,15 +112,23 @@ export class EvolutionClient implements WhatsappClient {
       throw new Error(`Failed to fetch participants: ${response.status} - ${responseText}`);
     }
 
-    const data = JSON.parse(responseText);
-    logger.info('Parsed group participants', {data});
-    return data.participants.map((p: any) => {
-      const hasPhone = !!p.phoneNumber;
-      return {
-        whatsappId: p.phoneNumber ?? p.id,
-        lid: hasPhone && p.id?.endsWith('@lid') ? p.id : undefined,
-        role: p.admin ?? null,
-      };
+    const data = JSON.parse(responseText) as { participants?: EvolutionGroupParticipant[] };
+    logger.info('Parsed group participants', { data });
+    return (data.participants ?? []).flatMap((participant) => {
+      const whatsappId = participant.phoneNumber ?? participant.id;
+      if (!whatsappId) {
+        return [];
+      }
+
+      const hasPhone = !!participant.phoneNumber;
+      return [
+        {
+          whatsappId,
+          lid: hasPhone && participant.id?.endsWith('@lid') ? participant.id : undefined,
+          name: participant.name ?? undefined,
+          role: participant.admin ?? null,
+        },
+      ];
     });
   }
 
@@ -159,8 +181,8 @@ export class EvolutionClient implements WhatsappClient {
       throw new Error(`Failed to fetch groups: ${response.status} - ${responseText}`);
     }
 
-    const groups = JSON.parse(responseText);
-    return groups.map((group: any) => ({
+    const groups = JSON.parse(responseText) as EvolutionGroup[];
+    return groups.map((group) => ({
       whatsappId: group.id,
       name: group.subject,
     }));

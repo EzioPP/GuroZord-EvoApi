@@ -100,6 +100,13 @@ export class GroupService {
     return await this.groupRepository.getOwnedGroupByMemberAndGroupName(whatsappId, groupName);
   }
 
+  async updateMemberNameIfChanged(whatsappId: string, name: string) {
+    if (!whatsappId) throw new ValidationError('WhatsApp ID is required', { whatsappId });
+    if (!name?.trim()) return null;
+    this.logger.debug('Service: Updating member name if changed', { whatsappId });
+    return await this.groupRepository.updateMemberNameIfChanged(whatsappId, name);
+  }
+
   async syncGroups() {
     try {
       this.logger.info('Service: Checking and syncing groups with WhatsApp');
@@ -125,6 +132,7 @@ export class GroupService {
               whatsappId: p.whatsappId,
               whatsappNumber: p.whatsappId.split('@')[0],
               whatsappLid: p.lid ?? undefined,
+              name: p.name,
             }),
           ),
         );
@@ -198,8 +206,30 @@ export class GroupService {
     const results = await this.groupRepository.getTopActiveMembers(groupWhatsappId, limit);
     return results.map((r) => ({
       whatsappNumber: r.member.whatsappNumber,
+      name: r.member.name,
       messageCount: r.messageCount,
     }));
+  }
+
+  async getTopActiveMembersByPeriod(
+    groupWhatsappId: string,
+    periodType: 'week' | 'month',
+    limit: number,
+  ) {
+    if (!groupWhatsappId)
+      throw new ValidationError('Group WhatsApp ID is required', { groupWhatsappId });
+    if (limit <= 0)
+      throw new ValidationError('Limit must be greater than 0', { groupWhatsappId, limit });
+    this.logger.info('Service: Fetching top active members by period', {
+      groupWhatsappId,
+      periodType,
+      limit,
+    });
+    return await this.groupRepository.getTopActiveMembersByPeriod(
+      groupWhatsappId,
+      periodType,
+      limit,
+    );
   }
 
   async removeMembership(whatsappId: string, groupWhatsappId: string) {
