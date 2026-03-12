@@ -153,6 +153,31 @@ export class GroupRepository {
     name?: string;
   }) {
     try {
+      // When Evolution sends a LID-based ID and we have a real phone number,
+      // look up the existing member by phone to update their LID instead of
+      // creating a duplicate (LID migrations happen when WA reassigns LIDs).
+      const isLidBased = data.whatsappId.endsWith('@lid');
+      const phoneIsReal = /^\d+$/.test(data.whatsappNumber);
+      if (isLidBased && phoneIsReal) {
+        const existing = await this.prisma.member.findFirst({
+          where: { whatsappNumber: data.whatsappNumber },
+        });
+        if (existing) {
+          logger.debug('Repository: Updating existing member LID on re-join', {
+            memberId: existing.memberId,
+            oldWhatsappId: existing.whatsappId,
+            newLid: data.whatsappId,
+          });
+          return await this.prisma.member.update({
+            where: { memberId: existing.memberId },
+            data: {
+              whatsappLid: data.whatsappId,
+              ...(data.name && { name: data.name }),
+            },
+          });
+        }
+      }
+
       return await this.prisma.member.upsert({
         where: { whatsappId: data.whatsappId },
         update: {

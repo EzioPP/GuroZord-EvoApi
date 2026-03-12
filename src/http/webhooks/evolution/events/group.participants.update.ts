@@ -66,7 +66,7 @@ export async function handleGroupParticipantsUpdate(data: GroupParticipantsUpdat
       const phoneNumber = participant.phoneNumber.split('@')[0];
       logger.info('New participant joined group', { groupId, phoneNumber });
 
-      await Services.groupService.addMembership(participantWhatsappId, groupId);
+      await Services.groupService.addMembership(participantWhatsappId, groupId, undefined, phoneNumber);
       const member = await Services.groupService.getUserByWhatsappId(participantWhatsappId).catch(() => null);
       scheduleWelcome(groupId, {
         whatsappNumber: phoneNumber,

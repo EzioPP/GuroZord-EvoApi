@@ -24,17 +24,17 @@ export async function handleMessagesUpsert(data: EvolutionMessageData) {
   const pushName = data.pushName?.trim();
   const message = data.message?.conversation;
 
-  if (!message) return;
-
   if (pushName) {
     await Services.groupService.updateMemberNameIfChanged(senderId, pushName).catch(() => null);
   }
 
-  const msg = message.trim().toLowerCase();
-
   if (groupWhatsappId) {
     await Services.groupService.incrementMessageCount(senderId, groupWhatsappId).catch(() => null);
   }
+
+  if (!message) return;
+
+  const msg = message.trim().toLowerCase();
 
   if (!msg.startsWith('/')) return;
 

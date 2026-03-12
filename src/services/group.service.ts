@@ -178,14 +178,14 @@ export class GroupService {
     return membership?.isAdmin ?? false;
   }
 
-  async addMembership(whatsappId: string, groupWhatsappId: string, whatsappLid?: string) {
+  async addMembership(whatsappId: string, groupWhatsappId: string, whatsappLid?: string, whatsappNumber?: string) {
     if (!whatsappId) throw new ValidationError('WhatsApp ID is required', { whatsappId });
     if (!groupWhatsappId)
       throw new ValidationError('Group WhatsApp ID is required', { groupWhatsappId });
     this.logger.info('Service: Adding membership', { whatsappId, groupWhatsappId });
     const member = await this.groupRepository.upsertMember({
       whatsappId,
-      whatsappNumber: whatsappId.split('@')[0],
+      whatsappNumber: whatsappNumber ?? whatsappId.split('@')[0],
       whatsappLid,
     });
     const group = await this.groupRepository.getGroupByWhatsappId(groupWhatsappId);
