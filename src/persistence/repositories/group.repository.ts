@@ -327,6 +327,14 @@ export class GroupRepository {
 
       const now = new Date();
 
+      // Ensure membership exists before incrementing
+      await this.upsertMembership({
+        memberId: member.memberId,
+        groupId: group.groupId,
+        isOwner: false,
+        isAdmin: false,
+      });
+
       // Update membership with all-time count
       const updateResult = await this.prisma.membership.updateMany({
         where: { memberId: member.memberId, groupId: group.groupId, isActive: true },
